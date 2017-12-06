@@ -79,7 +79,8 @@ def conv(x,
          weight_decay=0.00004,
          b_norm=False,
          activation_fn=tf.nn.relu,
-         scope=None):
+         scope=None,
+         is_training=True):
     x_shape = x.get_shape().as_list()
 
     with tf.variable_scope(scope):
@@ -90,19 +91,19 @@ def conv(x,
 
         y = tf.nn.conv2d(x, w, strides, padding)
         if b_norm:
-            y = batch_norm(y, scope='b_norm')
+            y = batch_norm(y, scope='b_norm', is_training=is_training)
         else:
             b = _create_variable('biases', num_outputs, tf.zeros_initializer(), weight_decay)
             y = tf.nn.bias_add(y, b)
-        if activation_fn is not None:
-            y = activation_fn(y, name='relu')
+    if activation_fn is not None:
+        y = activation_fn(y, name='activation')
     return y
 
 
 if __name__ == '__main__':
     x = tf.zeros(dtype=tf.float32, shape=(10,10,10,3))
     y = batch_norm(x, scope='batch_norm')
-    y = conv(y, 10, [3, 3], scope='conv', b_norm=True, activation_fn=None)
+    y = conv(y, 10, [3, 3], scope='conv', b_norm=False)
     with tf.Session() as sess:
         writer = tf.summary.FileWriter('logs', sess.graph)
         writer.flush()
