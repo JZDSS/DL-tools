@@ -4,7 +4,7 @@ import time
 
 import tensorflow as tf
 import tensorflow.contrib.losses as losses
-from muti_gpu.nets import build
+from muti_gpus.nets import build
 
 flags = tf.app.flags
 
