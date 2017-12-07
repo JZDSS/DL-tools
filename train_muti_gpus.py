@@ -81,13 +81,13 @@ def main(_):
     config.gpu_options.per_process_gpu_memory_fraction = 0.7
     config.gpu_options.allow_growth = True
     config.allow_soft_placement = True
-    config.log_device_placement = True
+    # config.log_device_placement = True
     if not tf.gfile.Exists(FLAGS.data_dir):
         raise RuntimeError('data direction is not exist!')
 
-    # if tf.gfile.Exists(FLAGS.log_dir):
-    #     tf.gfile.DeleteRecursively(FLAGS.log_dir)
-    # tf.gfile.MakeDirs(FLAGS.log_dir)
+    if tf.gfile.Exists(FLAGS.log_dir):
+        tf.gfile.DeleteRecursively(FLAGS.log_dir)
+    tf.gfile.MakeDirs(FLAGS.log_dir)
 
     if not tf.gfile.Exists(FLAGS.ckpt_dir):
         tf.gfile.MakeDirs(FLAGS.ckpt_dir)
@@ -134,7 +134,7 @@ def main(_):
                     tf.get_variable_scope().reuse_variables()
         with tf.name_scope('scores'):
             with tf.name_scope('accuracy'):
-                accuracy = tf.reduce_mean(tf.concat(tower_acc, axis=0))
+                accuracy = tf.reduce_mean(tf.stack(tower_acc, axis=0))
 
             with tf.name_scope('batch_loss'):
                 batch_loss = tf.add_n(tower_loss)
@@ -171,7 +171,7 @@ def main(_):
 
             for i in range(FLAGS.start_step, FLAGS.max_steps + 1):
                 # feed = feed_dict(True, True)
-                if i % 100 == 0 and i != 0:  # Record summaries and test-set accuracy
+                if i % 1000 == 0 and i != 0:  # Record summaries and test-set accuracy
                     # loss0 = sess.run([total_loss], feed_dict=feed_dict(False, False))
                     # test_writer.add_summary(summary, i)
                     # feed[is_training] = FLAGS
