@@ -131,7 +131,7 @@ def main(_):
                         correct_prediction = tf.equal(tf.reshape(tf.argmax(logits, 1), [-1, 1]), tf.cast(label_batch, tf.int64))
                         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
                     tower_acc.append(accuracy)
-                    # tf.get_variable_scope().reuse_variables()
+                    tf.get_variable_scope().reuse_variables()
         with tf.name_scope('scores'):
             with tf.name_scope('accuracy'):
                 accuracy = tf.reduce_mean(tf.concat(tower_acc, axis=0))
@@ -143,12 +143,12 @@ def main(_):
         # variable_averages = tf.train.ExponentialMovingAverage(
         #     cifar10.MOVING_AVERAGE_DECAY, global_step)
         # variables_averages_op = variable_averages.apply(tf.trainable_variables())
-
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(update_ops):
-            apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
-        # train_op = tf.group(apply_gradient_op, variables_averages_op)
-        train_op = apply_gradient_op
+        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+            # train_op = tf.group(apply_gradient_op, variables_averages_op)
+            train_op = apply_gradient_op
 
 
         # summary_op = tf.summary.merge_all()
