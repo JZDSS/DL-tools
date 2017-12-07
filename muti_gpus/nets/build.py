@@ -1,10 +1,11 @@
 import tensorflow as tf
-def net(x, FLAGS, is_training, num_classes):
+def net(x, is_training, FLAGS):
     type = FLAGS.type
     if type == 'resnet':
         from muti_gpus.nets import resnet as my_net
     else:
         raise RuntimeError('Type error!!')
 
-    y = my_net.build_net(x, FLAGS.blocks, is_training, FLAGS)
+    y = my_net.build_net(x, is_training, FLAGS)
+
     return y

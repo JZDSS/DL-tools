@@ -117,7 +117,7 @@ def main(_):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('tower_%d' % i) as scope:
                     image_batch, label_batch = batch_queue.dequeue()
-                    logits = build.net(image_batch, FLAGS, is_training, FLAGS.num_classes)
+                    logits = build.net(image_batch, is_training, FLAGS)
 
                     losses.sparse_softmax_cross_entropy(logits, label_batch, scope=scope)
                     total_loss = losses.get_losses(scope=scope) + losses.get_regularization_losses(scope=scope)

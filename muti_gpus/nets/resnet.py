@@ -21,7 +21,8 @@ def block(inputs, num_outputs, weight_decay, scope, is_training, down_sample = F
     return res
 
 
-def build_net(x, n, is_training, FLAGS):
+def build_net(x, is_training, FLAGS):
+    n = FLAGS.blocks
     # shape = x.get_shape().as_list()
     with tf.variable_scope('pre'):
         pre = layers.conv(x, num_outputs=16,  kernel_size = [3, 3], scope='conv', b_norm=True, is_training=is_training,
