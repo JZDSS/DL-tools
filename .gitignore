@@ -1,3 +1,5 @@
 .idea/
 muti_gpus/__pycache__/
+*~
+*.pyc
 

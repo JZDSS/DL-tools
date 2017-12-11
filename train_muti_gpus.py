@@ -15,7 +15,7 @@ flags.DEFINE_float('weight_decay', 0.00004, 'weight decay')
 flags.DEFINE_float('momentum', 0.9, 'momentum')
 flags.DEFINE_integer('batch_size', 128, 'batch size')
 flags.DEFINE_integer('max_steps', 64000, 'max steps')
-flags.DEFINE_integer('start_step', 1, 'start steps')
+flags.DEFINE_integer('start_step', 0, 'start steps')
 flags.DEFINE_string('model_name', 'model', '')
 flags.DEFINE_string('gpu', '3', '')
 flags.DEFINE_integer('blocks', 5, '')
@@ -100,6 +100,7 @@ def main(_):
     with tf.device('/cpu:0'):
         global_step = tf.Variable(FLAGS.start_step, name='global_step', trainable=False)
         learning_rate = tf.train.piecewise_constant(global_step, [24000, 48000], [0.1, 0.01, 0.001])
+        tf.summary.scalar('learing rate', learning_rate)
         opt = tf.train.MomentumOptimizer(learning_rate, momentum=FLAGS.momentum)
         # learning_rate = tf.train.exponential_decay(0.01, global_step, 32000, 0.1)
         # opt = tf.train.GradientDescentOptimizer(learning_rate)
@@ -137,7 +138,11 @@ def main(_):
                 accuracy = tf.reduce_mean(tf.stack(tower_acc, axis=0))
 
             with tf.name_scope('batch_loss'):
-                batch_loss = tf.add_n(tower_loss)
+                batch_loss = tf.add_n(tower_loss)[0]
+
+            tf.summary.scalar('loss', batch_loss)
+            tf.summary.scalar('accuracy', accuracy)
+
         grads = average_gradients(tower_grads)
 
         # variable_averages = tf.train.ExponentialMovingAverage(
@@ -153,6 +158,7 @@ def main(_):
 
         # summary_op = tf.summary.merge_all()
         # init = tf.global_variables_initializer()
+        summary_op = tf.summary.merge_all()
 
         saver = tf.train.Saver(name="saver")
 
@@ -171,12 +177,12 @@ def main(_):
 
             for i in range(FLAGS.start_step, FLAGS.max_steps + 1):
                 # feed = feed_dict(True, True)
-                if i % 1000 == 0 and i != 0:  # Record summaries and test-set accuracy
+                if i % 1000 == 0:  # Record summaries and test-set accuracy
                     # loss0 = sess.run([total_loss], feed_dict=feed_dict(False, False))
                     # test_writer.add_summary(summary, i)
                     # feed[is_training] = FLAGS
-                    acc, loss = sess.run([accuracy, batch_loss], feed_dict={is_training: False})
-                    # train_writer.add_summary(summary, i)
+                    acc, loss, summ = sess.run([accuracy, batch_loss, summary_op], feed_dict={is_training: False})
+                    train_writer.add_summary(summ, i)
                     print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file=f)
                     # print('step %d: train_acc=%f, train_loss=%f; test_acc=%f, test_loss=%f' % (i, acc1, loss1, acc0, loss0),
                     #       file=f)
