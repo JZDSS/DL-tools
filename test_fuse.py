@@ -51,13 +51,13 @@ def main(_):
     with tf.variable_scope('compress70'):
         y1 = build.net(x, False, FLAGS)
     varlist1 = {v.op.name.replace('compress70/', ''): v
-                    for v in tf.get_collection(tf.GraphKeys.VARIABLES, scope="compress70")}
+                for v in tf.get_collection(tf.GraphKeys.VARIABLES, scope="compress70")}
     saver1 = tf.train.Saver(var_list=varlist1)
 
     with tf.variable_scope('compress90'):
         y2 = build.net(x, False, FLAGS)
     varlist2 = {v.op.name.replace('compress90/', ''): v
-                    for v in tf.get_collection(tf.GraphKeys.VARIABLES, scope="compress90/")}
+                for v in tf.get_collection(tf.GraphKeys.VARIABLES, scope="compress90/")}
     saver2 = tf.train.Saver(var_list=varlist2)
 
     with tf.variable_scope('gamma0_8'):
@@ -101,9 +101,6 @@ def main(_):
     # with tf.control_dependencies(update_ops):
     pred = tf.nn.softmax(y, 1)
 
-    with tf.name_scope("saver"):
-        saver = tf.train.Saver(name="saver")
-
     f = open(os.path.join(FLAGS.meta_dir, FLAGS.set) + '.txt', 'r')
     image_names = []
     labels = []
@@ -138,7 +135,7 @@ def main(_):
     correct = 0.
     total_p = 0.
     correct_p = 0.
-    with tf.Session(config = config) as sess:
+    with tf.Session(config=config) as sess:
         # if tf.gfile.Exists(os.path.join(FLAGS.ckpt_dir, 'checkpoint')):
         #     saver.restore(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name))
         # else:
