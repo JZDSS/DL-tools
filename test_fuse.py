@@ -140,14 +140,14 @@ def main(_):
         #     saver.restore(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name))
         # else:
         #     raise RuntimeError("Check point files don't exist!")
-        saver1.restore(sess, os.path.join('stand_alone', 'compress70/ckpt/model'))
-        saver2.restore(sess, os.path.join('stand_alone', 'compress90/ckpt/model'))
-        saver3.restore(sess, os.path.join('stand_alone', 'gamma0_8/ckpt/model'))
-        saver4.restore(sess, os.path.join('stand_alone', 'gamma1_2/ckpt/model'))
-        saver5.restore(sess, os.path.join('stand_alone', 'resize0_5/ckpt/model'))
-        saver6.restore(sess, os.path.join('stand_alone', 'resize0_8/ckpt/model'))
-        saver7.restore(sess, os.path.join('stand_alone', 'resize1_5/ckpt/model'))
-        saver8.restore(sess, os.path.join('stand_alone', 'resize2_0/ckpt/model'))
+        saver1.restore(sess, 'stand_alone/compress70/ckpt/model')
+        saver2.restore(sess, 'stand_alone/compress90/ckpt/model')
+        saver3.restore(sess, 'stand_alone/gamma0_8/ckpt/model')
+        saver4.restore(sess, 'stand_alone/gamma1_2/ckpt/model')
+        saver5.restore(sess, 'stand_alone/resize0_5/ckpt/model')
+        saver6.restore(sess, 'stand_alone/resize0_8/ckpt/model')
+        saver7.restore(sess, 'stand_alone/resize1_5/ckpt/model')
+        saver8.restore(sess, 'stand_alone/resize2_0/ckpt/model')
 
         for i in range(len(labels)):
             label = labels[i]
