@@ -60,6 +60,8 @@ def read_from_tfrecord(tfrecord_file_queue):
     ground_truth = tf.decode_raw(tfrecord_features['label'], tf.int32)
     pres = tf.decode_raw(tfrecord_features['pre'], tf.int32)
     image = tf.cast(tf.reshape(image, [FLAGS.patch_size, FLAGS.patch_size, 3]), tf.float32)
+    image = tf.image.random_flip_up_down(image)
+    image = tf.image.random_flip_left_right(image)
     image = tf.image.per_image_standardization(image)
     ground_truth = tf.reshape(ground_truth, [1])
     pres = tf.reshape(pres, [1])
