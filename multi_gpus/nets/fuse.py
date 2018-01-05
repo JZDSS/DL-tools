@@ -53,14 +53,14 @@ def build_net(x, is_training, FLAGS):
     confs = []
     ys = []
     with tf.variable_scope('compress70'):
-        conf1, y1 = build_single_net(x, False, FLAGS)
+        conf1, y1 = build_single_net(x, is_training, FLAGS)
         conf1 = tf.sigmoid(layers.conv(conf1, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                     b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay, activation_fn=None))
         confs.append(conf1)
         ys.append(y1)
 
     with tf.variable_scope('compress90'):
-        conf2, y2 = build_single_net(x, False, FLAGS)
+        conf2, y2 = build_single_net(x, is_training, FLAGS)
         conf2 = tf.sigmoid(layers.conv(conf2, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))
@@ -68,7 +68,7 @@ def build_net(x, is_training, FLAGS):
         ys.append(y2)
 
     with tf.variable_scope('gamma0_8'):
-        conf3, y3 = build_single_net(x, False, FLAGS)
+        conf3, y3 = build_single_net(x, is_training, FLAGS)
         conf3 = tf.sigmoid(layers.conv(conf3, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))
@@ -76,7 +76,7 @@ def build_net(x, is_training, FLAGS):
         ys.append(y3)
 
     with tf.variable_scope('gamma1_2'):
-        conf4, y4 = build_single_net(x, False, FLAGS)
+        conf4, y4 = build_single_net(x, is_training, FLAGS)
         conf4 = tf.sigmoid(layers.conv(conf4, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))
@@ -84,7 +84,7 @@ def build_net(x, is_training, FLAGS):
         ys.append(y4)
 
     with tf.variable_scope('resize0_5'):
-        conf5, y5 = build_single_net(x, False, FLAGS)
+        conf5, y5 = build_single_net(x, is_training, FLAGS)
         conf5 = tf.sigmoid(layers.conv(conf5, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))
@@ -92,7 +92,7 @@ def build_net(x, is_training, FLAGS):
         ys.append(y5)
 
     with tf.variable_scope('resize0_8'):
-        conf6, y6 = build_single_net(x, False, FLAGS)
+        conf6, y6 = build_single_net(x, is_training, FLAGS)
         conf6 = tf.sigmoid(layers.conv(conf6, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))
@@ -100,7 +100,7 @@ def build_net(x, is_training, FLAGS):
         ys.append(y6)
 
     with tf.variable_scope('resize1_5'):
-        conf7, y7 = build_single_net(x, False, FLAGS)
+        conf7, y7 = build_single_net(x, is_training, FLAGS)
         conf7 = tf.sigmoid(layers.conv(conf7, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))
@@ -108,7 +108,7 @@ def build_net(x, is_training, FLAGS):
         ys.append(y7)
 
     with tf.variable_scope('resize2_0'):
-        conf8, y8 = build_single_net(x, False, FLAGS)
+        conf8, y8 = build_single_net(x, is_training, FLAGS)
         conf8 = tf.sigmoid(layers.conv(conf8, num_outputs=1, kernel_size=[1, 1], scope='fc2', padding='VALID',
                                        b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay,
                                        activation_fn=None))

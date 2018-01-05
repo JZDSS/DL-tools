@@ -1,6 +1,5 @@
-from muti_gpus import layers
 import tensorflow as tf
-
+from muti_gpus import layers
 
 def block(inputs, num_outputs, weight_decay, scope, is_training, down_sample = False):
     with tf.variable_scope(scope):
@@ -21,7 +20,7 @@ def block(inputs, num_outputs, weight_decay, scope, is_training, down_sample = F
     return res
 
 
-def build_net(x, is_training, FLAGS):
+def build_single_net(x, is_training, FLAGS):
     n = FLAGS.blocks
     # shape = x.get_shape().as_list()
     with tf.variable_scope('pre'):
@@ -43,22 +42,37 @@ def build_net(x, is_training, FLAGS):
     shape = h.get_shape().as_list()
 
     h = tf.contrib.layers.avg_pool2d(h, [shape[1], shape[2]], scope='global_pool')
-    h = layers.conv(h, num_outputs=FLAGS.num_classes, kernel_size=[1, 1], scope='fc1', padding='VALID',
+    # res = layers.conv(h, num_outputs=FLAGS.num_classes, kernel_size=[1, 1], scope='fc1', padding='VALID',
+    #                 b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay, activation_fn=None)
+
+    return h
+
+
+
+def build_net(x, is_training, FLAGS):
+
+    with tf.variable_scope('branch1'):
+        y1 = build_single_net(x, is_training, FLAGS)
+        y1 = p_relu(y1)
+
+    with tf.variable_scope('branch2'):
+        y2 = build_single_net(x, is_training, FLAGS)
+        y2 = p_relu(y2)
+
+    with tf.variable_scope('branch3'):
+        y3 = build_single_net(x, is_training, FLAGS)
+        y3 = p_relu(y3)
+
+    with tf.variable_scope('branch4'):
+        y4 = build_single_net(x, is_training, FLAGS)
+        
+    con = tf.concat([y1, y2, y3], axis=3) #192
+    con = tf.reshape(con, [-1, 1, 192])
+
+    w = layers.conv(y4, num_outputs=FLAGS.num_classes*192, kernel_size=[1, 1], scope='fc2', padding='VALID',
                     b_norm=True, is_training=is_training, weight_decay=FLAGS.weight_decay, activation_fn=None)
+    w = tf.reshape(w, [-1, 192, FLAGS.num_classes])
 
-    return tf.reshape(h, [-1, FLAGS.num_classes])
-
-
-if __name__ == '__main__':
-    flags = tf.app.flags
-    flags.DEFINE_integer('num_classes', 10, '')
-    flags.DEFINE_float('weight_decay', 0.00004, '')
-    FLAGS = flags.FLAGS
-    x = tf.placeholder(tf.float32, (10, 10, 10, 3))
-    build_net(x, 1, True, FLAGS)
-    with tf.Session() as sess:
-        writer = tf.summary.FileWriter('logs', sess.graph)
-        writer.flush()
-
-    writer.close()
-
+    res = tf.matmul(con, w)
+    res = layers.batch_norm(res, is_training=is_training, scope='bn')
+    return tf.reshape(res, [-1, FLAGS.num_classes])

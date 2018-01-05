@@ -2,4 +2,6 @@
 muti_gpus/__pycache__/
 *~
 *.pyc
-
+official/
+out/
+stand_alone/
