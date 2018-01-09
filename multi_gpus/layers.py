@@ -32,7 +32,7 @@ def p_relu(x):
     return res
 
 def batch_norm(x,
-               decay=0.99,
+               decay=0.999,
                epsilon=0.001,
                is_training=True,
                scope=None):
@@ -97,6 +97,7 @@ def conv(x,
 
         w = _create_variable('weights', (kernel_size[0], kernel_size[1], x_shape[-1], num_outputs),
                              tf.truncated_normal_initializer(stddev=math.sqrt(2/(kernel_size[0]*kernel_size[1]*x_shape[-1]))),
+                             # tf.contrib.layers.xavier_initializer(),
                              weight_decay, trainable)
 
         y = tf.nn.conv2d(x, w, strides, padding)

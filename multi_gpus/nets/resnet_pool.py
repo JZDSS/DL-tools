@@ -1,4 +1,4 @@
-from multi_gpus import layers
+from multi_gpus import layers2 as layers
 import tensorflow as tf
 
 
