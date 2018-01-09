@@ -35,7 +35,9 @@ def batch_norm(x,
                decay=0.999,
                epsilon=0.001,
                is_training=True,
-               scope=None):
+               scope=None,
+               center=True,
+               scale=False):
     with tf.variable_scope(scope):
         is_training = tf.convert_to_tensor(is_training, dtype=tf.bool, name='is_training')
         x_shape = x.get_shape().as_list()
@@ -44,9 +46,9 @@ def batch_norm(x,
         axis = list(range(len(x_shape) - 1))
 
         beta = _create_variable('beta', params_shape,
-                                initializer=tf.zeros_initializer)
+                                initializer=tf.zeros_initializer, trainable=center)
         gamma = _create_variable('gamma', params_shape,
-                                 initializer=tf.ones_initializer)
+                                 initializer=tf.ones_initializer, trainable=scale)
 
         moving_mean = _create_variable('moving_mean', params_shape,
                                        initializer=tf.zeros_initializer,
