@@ -5,3 +5,5 @@ muti_gpus/__pycache__/
 official/
 out/
 stand_alone/
+logs/
+ignore/

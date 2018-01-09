@@ -6,29 +6,10 @@ import tensorflow as tf
 import tensorflow.contrib.losses as losses
 import numpy as np
 from multi_gpus.nets import build
+import cfg
 
-flags = tf.app.flags
+FLAGS = cfg.FLAGS
 
-flags.DEFINE_string('data_dir', '../SPCup/patches', 'data direction')
-flags.DEFINE_string('log_dir', './logs', 'log direction')
-flags.DEFINE_string('ckpt_dir', './ckpt', 'check point direction')
-flags.DEFINE_float('weight_decay', 0.0001, 'weight decay')
-flags.DEFINE_float('momentum', 0.9, 'momentum')
-flags.DEFINE_integer('batch_size', 256, 'batch size')
-flags.DEFINE_integer('max_steps', 150000, 'max steps')
-flags.DEFINE_integer('start_step', 0, 'start steps')
-flags.DEFINE_string('model_name', 'model', '')
-flags.DEFINE_string('gpu', '3', '')
-flags.DEFINE_integer('blocks', 3, '')
-flags.DEFINE_string('out_file', '', '')
-flags.DEFINE_integer('patch_size', 64, '')
-flags.DEFINE_string('type', '', '')
-flags.DEFINE_integer('num_classes', 10, '')
-flags.DEFINE_integer('num_branches', 0, '')
-flags.DEFINE_boolean('p_relu', False, '')
-flags.DEFINE_boolean('aug', False, '')
-
-FLAGS = flags.FLAGS
 
 is_training = tf.placeholder(tf.bool)
 
@@ -108,7 +89,8 @@ def main(_):
     with tf.device('/cpu:0'):
         num_gpus = len(FLAGS.gpu.split(','))
         global_step = tf.Variable(FLAGS.start_step, name='global_step', trainable=False)
-        learning_rate = tf.train.exponential_decay(0.05, global_step, 2000, 0.9, staircase=True)
+        # learning_rate = tf.train.exponential_decay(0.05, global_step, 2000, 0.9, staircase=True)
+        learning_rate = tf.train.exponential_decay(0.1, global_step, 1000, 0.95, staircase=True)
         # learning_rate = tf.train.piecewise_constant(global_step, [24000, 48000, 72000, 108000, 144000], 
         #                                                 [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001])        
         tf.summary.scalar('learing rate', learning_rate)
@@ -160,7 +142,7 @@ def main(_):
             with tf.name_scope('accuracy_v'):
                 accuracy_v = tf.reduce_mean(tf.stack(tower_acc_v, axis=0))
             with tf.name_scope('batch_loss'):
-                batch_loss = tf.add_n(tower_loss)[0]
+                batch_loss = tf.add_n(tower_loss)[0]/num_gpus
 
             tf.summary.scalar('loss', batch_loss)
             tf.summary.scalar('accuracy', accuracy)
@@ -172,7 +154,6 @@ def main(_):
         # variables_averages_op = variable_averages.apply(tf.trainable_variables())
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            print(update_ops)
             with tf.control_dependencies(update_ops):
                 apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
             # train_op = tf.group(apply_gradient_op, variables_averages_op)

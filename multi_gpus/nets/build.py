@@ -13,6 +13,10 @@ def net(x, is_training, FLAGS):
         from multi_gpus.nets import fuse as my_net
     elif type == 'cluster':
         from multi_gpus.nets import cluster as my_net
+    elif type == 'cluster2':
+        from multi_gpus.nets import cluster2 as my_net
+    elif type == 'cluster3':
+        from multi_gpus.nets import cluster3 as my_net
     elif type == 'bcp':
         from multi_gpus.nets import bcp as my_net
     elif type == 'res34':

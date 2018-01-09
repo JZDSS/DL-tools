@@ -48,9 +48,6 @@ def batch_norm(x,
 
         beta = _create_variable('beta', params_shape,
                                 initializer=tf.zeros_initializer, trainable=center)
-        gamma = _create_variable('gamma', params_shape,
-                                 initializer=tf.ones_initializer, trainable=scale)
-
         moving_mean = _create_variable('moving_mean', params_shape,
                                        initializer=tf.zeros_initializer,
                                        trainable=False)
@@ -67,12 +64,8 @@ def batch_norm(x,
         summ = tf.summary.histogram('variance', variance, collections='var')
         tf.add_to_collection('var', summ)
 
-        with tf.name_scope("update_moving_mean") as scope:
-            decay = tf.convert_to_tensor(decay, name="decay")
-            update_delta = (moving_mean_old - mean) * (1.0 - decay) - \
-                           moving_mean_old * (decay - tf.pow(decay, num_gpus) / num_gpus)
-            update_moving_mean = tf.assign_sub(moving_mean, update_delta, name=scope)
-
+        update_moving_mean = moving_averages.assign_moving_average(
+            moving_mean, mean, decay, name='update_moving_mean')
         update_moving_variance = moving_averages.assign_moving_average(
             moving_variance, variance, decay, name='update_moving_variance')
         tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_moving_mean)
