@@ -31,78 +31,78 @@ def p_relu(x):
     tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_alpha)
     return res
 
-def batch_norm(x,
-               decay=0.999,
-               epsilon=0.001,
-               is_training=True,
-               scope=None,
-               center=True,
-               scale=True):
-    with tf.variable_scope(scope):
-        beta = tf.Variable(tf.constant(0.0, shape=[x.shape[-1]]), name='beta', trainable=center)
-        gamma = tf.Variable(tf.constant(1.0, shape=[x.shape[-1]]), name='gamma', trainable=scale)
-        axises = list(range(len(x.shape) - 1))
-        batch_mean, batch_var = tf.nn.moments(x, axises, name='moments')
-        ema = tf.train.ExponentialMovingAverage(decay=decay)
-
-        def mean_var_with_update():
-            ema_apply_op = ema.apply([batch_mean, batch_var])
-            with tf.control_dependencies([ema_apply_op]):
-                return tf.identity(batch_mean), tf.identity(batch_var)
-
-        mean, var = tf.cond(is_training, mean_var_with_update,
-                            lambda: (ema.average(batch_mean), ema.average(batch_var)))
-        normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon)
-    return normed
 # def batch_norm(x,
 #                decay=0.999,
 #                epsilon=0.001,
 #                is_training=True,
 #                scope=None,
 #                center=True,
-#                scale=False):
+#                scale=True):
 #     with tf.variable_scope(scope):
-#         is_training = tf.convert_to_tensor(is_training, dtype=tf.bool, name='is_training')
-#         x_shape = x.get_shape().as_list()
-#         params_shape = x_shape[-1:]
-#
-#         axis = list(range(len(x_shape) - 1))
-#
-#         beta = _create_variable('beta', params_shape,
-#                                 initializer=tf.zeros_initializer, trainable=center)
-#         gamma = _create_variable('gamma', params_shape,
-#                                  initializer=tf.ones_initializer, trainable=scale)
-#
-#         moving_mean = _create_variable('moving_mean', params_shape,
-#                                        initializer=tf.zeros_initializer,
-#                                        trainable=False)
-#         moving_variance = _create_variable('moving_variance',
-#                                            params_shape,
-#                                            initializer=tf.ones_initializer,
-#                                            trainable=False)
-#
-#         # These ops will only be preformed when training.
-#         mean, variance = tf.nn.moments(x, axis)
-#
-#         summ = tf.summary.histogram('mean', mean)
-#         tf.add_to_collection('mean', summ)
-#         summ = tf.summary.histogram('variance', variance, collections='var')
-#         tf.add_to_collection('var', summ)
-#
-#         update_moving_mean = moving_averages.assign_moving_average(
-#             moving_mean, mean, decay, name='update_moving_mean')
-#         update_moving_variance = moving_averages.assign_moving_average(
-#             moving_variance, variance, decay, name='update_moving_variance')
-#         tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_moving_mean)
-#         tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_moving_variance)
-#
-#         mean, variance = tf.cond(
-#             is_training, lambda: (mean, variance),
-#             lambda: (moving_mean, moving_variance))
-#
-#         y = tf.nn.batch_normalization(x, mean, variance, beta, gamma, epsilon)
-#
-#     return y
+#         beta = tf.Variable(tf.constant(0.0, shape=[x.shape[-1]]), name='beta', trainable=center)
+#         gamma = tf.Variable(tf.constant(1.0, shape=[x.shape[-1]]), name='gamma', trainable=scale)
+#         axises = list(range(len(x.shape) - 1))
+#         batch_mean, batch_var = tf.nn.moments(x, axises, name='moments')
+#         ema = tf.train.ExponentialMovingAverage(decay=decay)
+
+#         def mean_var_with_update():
+#             ema_apply_op = ema.apply([batch_mean, batch_var])
+#             with tf.control_dependencies([ema_apply_op]):
+#                 return tf.identity(batch_mean), tf.identity(batch_var)
+
+#         mean, var = tf.cond(is_training, mean_var_with_update,
+#                             lambda: (ema.average(batch_mean), ema.average(batch_var)))
+#         normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon)
+#     return normed
+def batch_norm(x,
+               decay=0.999,
+               epsilon=0.001,
+               is_training=True,
+               scope=None,
+               center=True,
+               scale=False):
+    with tf.variable_scope(scope):
+        is_training = tf.convert_to_tensor(is_training, dtype=tf.bool, name='is_training')
+        x_shape = x.get_shape().as_list()
+        params_shape = x_shape[-1:]
+
+        axis = list(range(len(x_shape) - 1))
+
+        beta = _create_variable('beta', params_shape,
+                                initializer=tf.zeros_initializer, trainable=center)
+        gamma = _create_variable('gamma', params_shape,
+                                 initializer=tf.ones_initializer, trainable=scale)
+
+        moving_mean = _create_variable('moving_mean', params_shape,
+                                       initializer=tf.zeros_initializer,
+                                       trainable=False)
+        moving_variance = _create_variable('moving_variance',
+                                           params_shape,
+                                           initializer=tf.ones_initializer,
+                                           trainable=False)
+
+        # These ops will only be preformed when training.
+        mean, variance = tf.nn.moments(x, axis)
+
+        summ = tf.summary.histogram('mean', mean)
+        tf.add_to_collection('mean', summ)
+        summ = tf.summary.histogram('variance', variance, collections='var')
+        tf.add_to_collection('var', summ)
+
+        update_moving_mean = moving_averages.assign_moving_average(
+            moving_mean, mean, decay, name='update_moving_mean')
+        update_moving_variance = moving_averages.assign_moving_average(
+            moving_variance, variance, decay, name='update_moving_variance')
+        tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_moving_mean)
+        tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_moving_variance)
+
+        mean, variance = tf.cond(
+            is_training, lambda: (mean, variance),
+            lambda: (moving_mean, moving_variance))
+
+        y = tf.nn.batch_normalization(x, mean, variance, beta, gamma, epsilon)
+
+    return y
 
 
 def conv(x,

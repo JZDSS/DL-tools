@@ -103,7 +103,6 @@ def main(_):
         tower_grads = []
         tower_loss = []
         tower_acc = []
-        tower_batch = []
         images_t, labels_t = input_pipeline(
             tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'train', '*.tfrecords')), FLAGS.batch_size * num_gpus)
         # batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
@@ -112,15 +111,15 @@ def main(_):
             tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'valid', '*.tfrecords')), (256 // num_gpus) * num_gpus)
         # batch_queue_v = tf.contrib.slim.prefetch_queue.prefetch_queue(
         #     [images_v, labels_v], capacity=2 * num_gpus)
+        image_batch0 = tf.placeholder(tf.float32, [None, FLAGS.patch_size, FLAGS.patch_size, 3], 'imgs')
+        label_batch0 = tf.placeholder(tf.int32, [None, 1], 'labels')
+        image_batch = tf.split(image_batch0, num_gpus, 0)
+        label_batch = tf.split(label_batch0, num_gpus, 0)
         for i in range(num_gpus):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('tower_%d' % i) as scope:
-                    # image_batch, label_batch = batch_queue.dequeue()
-                    image_batch = tf.placeholder(tf.float32, [None, FLAGS.patch_size, FLAGS.patch_size, 3], 'imgs')
-                    label_batch = tf.placeholder(tf.int32, [None, 1], 'labels')
-                    tower_batch.append((image_batch, label_batch))
-                    logits = build.net(image_batch, is_training, FLAGS)
-                    losses.sparse_softmax_cross_entropy(labels=label_batch, logits=logits, scope=scope)
+                    logits = build.net(image_batch[i], is_training, FLAGS)
+                    losses.sparse_softmax_cross_entropy(labels=label_batch[i], logits=logits, scope=scope)
                     total_loss = losses.get_losses(scope=scope) + losses.get_regularization_losses(scope=scope)
                     total_loss = tf.add_n(total_loss)
 
@@ -129,7 +128,7 @@ def main(_):
                     tower_loss.append(losses.get_losses(scope=scope))
 
                     with tf.name_scope('accuracy'):
-                        correct_prediction = tf.equal(tf.reshape(tf.argmax(logits, 1), [-1, 1]), tf.cast(label_batch, tf.int64))
+                        correct_prediction = tf.equal(tf.reshape(tf.argmax(logits, 1), [-1, 1]), tf.cast(label_batch[i], tf.int64))
                         accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
                     tower_acc.append(accuracy)
                     tf.get_variable_scope().reuse_variables()
@@ -148,7 +147,9 @@ def main(_):
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
             variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
             variables_averages_op = variable_averages.apply(tf.trainable_variables())
-            apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+            with tf.control_dependencies(update_ops):
+                apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
             train_op = tf.group(apply_gradient_op, variables_averages_op)
             # train_op = apply_gradient_op
 
@@ -185,12 +186,9 @@ def main(_):
                         img, lb = sess.run([images_v, labels_t])
                     else:
                         raise RuntimeError('Unknown set name')
-                    img_list = np.split(img, num_gpus, axis=0)
-                    lb_list = np.split(lb, num_gpus, axis=0)
                     feed_dict = {}
-                    for i in range(num_gpus):
-                        feed_dict[tower_batch[i][0]] = img_list[i]
-                        feed_dict[tower_batch[i][1]] = lb_list[i]
+                    feed_dict[image_batch0] = img
+                    feed_dict[label_batch0] = lb
                     feed_dict[is_training] = on_training
                     return feed_dict
                 # feed = feed_dict(True, True)
