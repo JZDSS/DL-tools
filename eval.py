@@ -169,8 +169,10 @@ def main(_):
         # summary_op = tf.summary.merge_all()
         # init = tf.global_variables_initializer()
         summary_op = tf.summary.merge_all()
-
-        saver = tf.train.Saver(name="saver")
+        variable_averages = tf.train.ExponentialMovingAverage(0.9999)
+        variables_to_restore = variable_averages.variables_to_restore()
+        saver = tf.train.Saver(variables_to_restore, name='saver')
+        # saver = tf.train.Saver(name="saver")
 
         with tf.Session(config=config) as sess:
             sess.run(tf.local_variables_initializer())

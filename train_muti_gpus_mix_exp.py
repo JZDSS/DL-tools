@@ -149,15 +149,12 @@ def main(_):
 
         grads = average_gradients(tower_grads)
 
-        # variable_averages = tf.train.ExponentialMovingAverage(
-        #     cifar10.MOVING_AVERAGE_DECAY, global_step)
-        # variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
+        variables_averages_op = variable_averages.apply(tf.trainable_variables())
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            with tf.control_dependencies(update_ops):
-                apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
-            # train_op = tf.group(apply_gradient_op, variables_averages_op)
-            train_op = apply_gradient_op
+            apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+            train_op = tf.group(apply_gradient_op, variables_averages_op)
+            # train_op = apply_gradient_op
 
 
         # summary_op = tf.summary.merge_all()
