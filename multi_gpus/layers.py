@@ -32,7 +32,7 @@ def p_relu(x):
     return res
 
 def batch_norm(x,
-               decay=0.5,
+               decay=0.999,
                epsilon=0.001,
                is_training=True,
                scope=None,
