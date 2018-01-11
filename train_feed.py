@@ -183,7 +183,7 @@ def main(_):
                     if set == 'train':
                         img, lb = sess.run([images_t, labels_t])
                     elif set == 'valid':
-                        img, lb = sess.run([images_v, labels_t])
+                        img, lb = sess.run([images_v, labels_v])
                     else:
                         raise RuntimeError('Unknown set name')
                     feed_dict = {}
