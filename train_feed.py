@@ -81,7 +81,7 @@ def main(_):
     # if not tf.gfile.Exists(FLAGS.ckpt_dir):
     tf.gfile.MakeDirs(os.path.join(FLAGS.ckpt_dir, 'best'))
 
-    f = open(FLAGS.out_file, 'a')
+    f = open(FLAGS.out_file + '.txt', 'a' if FLAGS.start_step is not 0 else 'w')
     if not f:
         raise RuntimeError('OUTPUT FILE OPEN ERROR!!!!!!')
 
@@ -109,7 +109,7 @@ def main(_):
         # batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
         #     [images, labels], capacity=2 * num_gpus)
         images_v, labels_v = input_pipeline(
-            tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'valid', '*.tfrecords')), (128 // num_gpus) * num_gpus)
+            tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'valid', '*.tfrecords')), (256 // num_gpus) * num_gpus)
         # batch_queue_v = tf.contrib.slim.prefetch_queue.prefetch_queue(
         #     [images_v, labels_v], capacity=2 * num_gpus)
         for i in range(num_gpus):
@@ -145,9 +145,9 @@ def main(_):
 
         grads = average_gradients(tower_grads)
 
-        variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
-        variables_averages_op = variable_averages.apply(tf.trainable_variables())
         with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+            variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
+            variables_averages_op = variable_averages.apply(tf.trainable_variables())
             apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
             train_op = tf.group(apply_gradient_op, variables_averages_op)
             # train_op = apply_gradient_op
@@ -189,8 +189,8 @@ def main(_):
                     lb_list = np.split(lb, num_gpus, axis=0)
                     feed_dict = {}
                     for i in range(num_gpus):
-                        feed_dict[tower_batch[i](0)] = img_list[i]
-                        feed_dict[tower_batch[i](1)] = lb_list[i]
+                        feed_dict[tower_batch[i][0]] = img_list[i]
+                        feed_dict[tower_batch[i][1]] = lb_list[i]
                     feed_dict[is_training] = on_training
                     return feed_dict
                 # feed = feed_dict(True, True)
@@ -204,13 +204,13 @@ def main(_):
                     cache_v[int(i/d)%5] = acc_v
                     train_writer.add_summary(summ, i)
                     valid_writer.add_summary(summ_v, i)
-                    print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file=f)
-                    print('step %d: acc(t)=%f(%f), loss(t)=%f;\nacc(v)=%f(%f), loss(v)=%f; lr=%e' % (i, acc, cache.mean(), loss, acc_v, cache_v.mean(), loss_v, lr), file=f)
+                    print(('step %d, ' % i) + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file=f)
+                    print('acc(t)=%f(%f), loss(t)=%f;\nacc(v)=%f(%f), loss(v)=%f; lr=%e' % (acc, cache.mean(), loss, acc_v, cache_v.mean(), loss_v, lr), file=f)
                     saver.save(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name), global_step=i)
                     if acc_v > 0.90:
                         saver_best.save(sess, os.path.join(FLAGS.ckpt_dir, 'best', FLAGS.model_name), global_step=i)
                     f.flush()
-                sess.run(train_op, feed_dict={is_training: get_batch('train', True)})
+                sess.run(train_op, feed_dict=get_batch('train', True))
 
             coord.request_stop()
             coord.join(threads)
