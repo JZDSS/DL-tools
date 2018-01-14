@@ -90,9 +90,9 @@ def main(_):
         num_gpus = len(FLAGS.gpu.split(','))
         global_step = tf.Variable(FLAGS.start_step, name='global_step', trainable=False)
         # learning_rate = tf.train.exponential_decay(0.05, global_step, 2000, 0.9, staircase=True)
-        learning_rate = tf.train.exponential_decay(0.1, global_step, 1000, 0.95, staircase=True)
-        # learning_rate = tf.train.piecewise_constant(global_step, [24000, 48000, 72000, 108000, 144000], 
-        #                                                 [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001])        
+        # learning_rate = tf.train.exponential_decay(0.05, global_step, 1000, 0.94, staircase=True)
+        learning_rate = tf.train.piecewise_constant(global_step, [24000, 48000, 72000, 108000], 
+                                                        [0.01, 0.001, 0.0001, 0.00001, 0.000001])        
         tf.summary.scalar('learing rate', learning_rate)
         # opt = tf.train.AdamOptimizer(learning_rate)
         opt = tf.train.MomentumOptimizer(learning_rate, momentum=FLAGS.momentum)
@@ -197,13 +197,16 @@ def main(_):
                     # test_writer.add_summary(summary, i)
                     # feed[is_training] = FLAGS
                     acc, loss, summ, lr = sess.run([accuracy, batch_loss, summary_op, learning_rate], feed_dict=get_batch('train', False))
+                    acc2 = sess.run(accuracy, feed_dict=get_batch('train', True))
                     cache[int(i/d)%5] = acc
                     acc_v, loss_v, summ_v = sess.run([accuracy, batch_loss, summary_op], feed_dict=get_batch('valid', False))
+                    acc2_v = sess.run(accuracy, feed_dict=get_batch('valid', True))
                     cache_v[int(i/d)%5] = acc_v
                     train_writer.add_summary(summ, i)
                     valid_writer.add_summary(summ_v, i)
                     print(('step %d, ' % i) + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file=f)
                     print('acc(t)=%f(%f), loss(t)=%f;\nacc(v)=%f(%f), loss(v)=%f; lr=%e' % (acc, cache.mean(), loss, acc_v, cache_v.mean(), loss_v, lr), file=f)
+                    print('%f, %f' % (acc2, acc2_v), file=f)
                     saver.save(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name), global_step=i)
                     if acc_v > 0.90:
                         saver_best.save(sess, os.path.join(FLAGS.ckpt_dir, 'best', FLAGS.model_name), global_step=i)
