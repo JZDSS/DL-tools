@@ -22,14 +22,40 @@ def _create_variable(name, shape, initializer, weight_decay=None, trainable=True
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, regularization)
     return var
 
-def p_relu(x):
-    alpha = _create_variable('alpha', [], initializer=tf.constant_initializer(0.01))
-    res = tf.nn.relu(x) + alpha * (x - tf.abs(x)) * 0.5
-    update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)), 
-                           lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
-                           lambda: tf.assign(alpha, alpha))
-    tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_alpha)
+def p_relu(x, name='p_relu'):
+    with tf.variable_scope(name):
+        alpha = _create_variable('alpha', [], initializer=tf.constant_initializer(0.25))
+        res = tf.nn.relu(x) - alpha * (tf.nn.relu(-x))
+        update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)), 
+                               lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
+                               lambda: tf.assign(alpha, alpha))
+        tf.add_to_collection('p_relu', update_alpha)
     return res
+
+def p_relu_channel_wise(x, name='p_relu_channel_wise'):
+    shape = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        alpha = _create_variable('alpha', shape[3], initializer=tf.constant_initializer(0.25))
+        res = tf.nn.relu(x) - alpha * (tf.nn.relu(-x))
+        # update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)), 
+        #                        lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
+        #                        lambda: tf.assign(alpha, alpha))
+        # tf.add_to_collection('p_relu', update_alpha)
+    return res
+    # with tf.variable_scope(name):
+    #     shape = x.get_shape().as_list()
+    #     xs = tf.split(x, shape[3], 3)
+    #     res = []
+    #     for i, x in enumerate(xs):
+    #         alpha = _create_variable('alpha_{}'.format(i), [], initializer=tf.constant_initializer(0.25))
+    #         y = tf.nn.relu(x) + alpha * (x - tf.abs(x)) * 0.5
+    #         update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)),
+    #                                lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
+    #                                lambda: tf.assign(alpha, alpha))
+    #         tf.add_to_collection('p_relu', update_alpha)
+    #         res.append(y)
+    #     res = tf.concat(res, 3)
+    # return res
 
 # def batch_norm(x,
 #                decay=0.999,

@@ -25,9 +25,9 @@ def build_net(x, is_training, FLAGS):
     n = FLAGS.blocks
     # shape = x.get_shape().as_list()
     with tf.variable_scope('pre'):
-        pre = layers.conv(x, num_outputs=64,  kernel_size = [7, 7], scope='conv', b_norm=True, is_training=is_training,
+        pre = layers.conv(x, num_outputs=64,  kernel_size = [5, 5], scope='conv', b_norm=True, is_training=is_training,
                           weight_decay=FLAGS.weight_decay)
-        pre = tf.contrib.layers.max_pool2d(pre, [3, 3], stride=2, padding='SAME', scope='pool')#32
+        # pre = tf.contrib.layers.max_pool2d(pre, [3, 3], stride=2, padding='SAME', scope='pool')#32
     h = pre
     for i in range(1, 4):
         h = block(h, 64, FLAGS.weight_decay, '64_block{}'.format(i), is_training)
@@ -40,9 +40,9 @@ def build_net(x, is_training, FLAGS):
     for i in range(1, 6):
         h = block(h, 256, FLAGS.weight_decay, '256_block{}'.format(i), is_training)
     
-    h = block(h, 512, FLAGS.weight_decay, '512_block_s2', is_training, True)
-    for i in range(1, 3):
-        h = block(h, 512, FLAGS.weight_decay, '512_block{}'.format(i), is_training)
+    # h = block(h, 512, FLAGS.weight_decay, '512_block_s2', is_training, True)
+    # for i in range(1, 3):
+    #     h = block(h, 512, FLAGS.weight_decay, '512_block{}'.format(i), is_training)
     shape = h.get_shape().as_list()
     h = tf.contrib.layers.avg_pool2d(h, [shape[1], shape[2]], scope='global_pool')
     shape = h.get_shape().as_list()

@@ -9,7 +9,7 @@ import numpy as np
 
 flags = tf.app.flags
 
-flags.DEFINE_string('data_dir', '/data/SPCup_preprocess', 'Data direction')
+flags.DEFINE_string('data_dir', '/data/SPCup2018_pre_process', 'Data direction')
 flags.DEFINE_string('out_dir', '/data/qiyao/valid_imgs', 'Output direction')
 flags.DEFINE_string('meta_dir', '/data/qiyao/official/meta', '')
 flags.DEFINE_string('out_file', './crop-out.txt', '')
@@ -38,7 +38,7 @@ def main(_):
         meta[int(label)] = class_name
         line = f.readline()
     f.close()
-    truth = []
+    # truth = []
     for data_dir in dirs:
 
         format = 'jpg' if 'jpeg' in data_dir or 'origin' in data_dir else 'tif'
@@ -58,6 +58,8 @@ def main(_):
             extra = 'r1_5'
         elif 'resize2' in data_dir:
             extra = 'r2_0'
+        elif 'origin' in data_dir:
+            extra = 'o'
         elif 'raw' in data_dir:
             continue
 
@@ -82,9 +84,9 @@ def main(_):
                 img = plt.imread(full_path)
                 for patch in get_patches(img, 1, 512):
                     plt.imsave(os.path.join(FLAGS.out_dir, meta[labels[i]] + '_' + img_name.split('.')[0]) + '.png', patch)
-                    truth.append(labels[i])
+                    # truth.append(labels[i])
         save_crop('valid')
-        np.save('truth.npy', truth)
+        # np.save('truth.npy', truth)
 
 
     ff.close()

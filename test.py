@@ -10,7 +10,7 @@ from multi_gpus.nets import build
 flags = tf.app.flags
 
 flags.DEFINE_string('ckpt_dir', './ckpt', 'check point direction')
-flags.DEFINE_integer('patches', 1024, 'batch size')
+flags.DEFINE_integer('patches', 128, 'batch size')
 flags.DEFINE_string('model_name', None, '')
 flags.DEFINE_integer('patch_size', 64, '')
 flags.DEFINE_string('set', 'valid', '')
@@ -25,6 +25,9 @@ flags.DEFINE_string('extra', '', 'j70, j90, g0_8 etc')
 flags.DEFINE_string('format', '', 'jpg or tif')
 flags.DEFINE_integer('num_branches', 0, '')
 flags.DEFINE_boolean('p_relu', False, '')
+flags.DEFINE_string('data_dir', '/data/spcup_test', '')
+flags.DEFINE_boolean('ema', False, '')
+flags.DEFINE_string('stand', '128', '')
 FLAGS = flags.FLAGS
 
 # def get_patches(img, max_patches, patch_size):
@@ -41,10 +44,20 @@ FLAGS = flags.FLAGS
 
 
 def standardization(x):
-    mean = np.mean(x)
-    stddev = np.std(x)
-    adjusted_stddev = max(stddev, 1./np.sqrt(FLAGS.patch_size * FLAGS.patch_size * 3))
-    return (x - mean) / adjusted_stddev
+    # return x
+    # x = np.roll(x, 32, 0)
+    # x = np.roll(x, 32, 1)
+    if FLAGS.stand == '128':
+        if FLAGS.data_dir == '/data/spcup_test':
+            return (x - 128.)/128.
+        else:
+            return (x*255 - 128.)/128.
+    else:
+        return x
+    # mean = np.mean(x)
+    # stddev = np.std(x)
+    # adjusted_stddev = max(stddev, 1./np.sqrt(FLAGS.patch_size * FLAGS.patch_size * 3))
+    # return (x - mean) / adjusted_stddev
 
 
 def main(_):
@@ -66,7 +79,11 @@ def main(_):
     # with tf.control_dependencies(update_ops):
     pred = tf.nn.softmax(y, 1)
 
-    with tf.name_scope("saver"):
+    if FLAGS.ema:
+        variable_averages = tf.train.ExponentialMovingAverage(0.9999)
+        variables_to_restore = variable_averages.variables_to_restore()
+        saver = tf.train.Saver(variables_to_restore, name='saver')
+    else:
         saver = tf.train.Saver(name="saver")
 
     # f = open(os.path.join(FLAGS.meta_dir, FLAGS.set) + '.txt', 'r')
@@ -87,7 +104,7 @@ def main(_):
     #     labels.append(int(label))
     #     line = f.readline()
     # f.close()
-    image_names = os.listdir('/data/spcup_test')
+    image_names = os.listdir(FLAGS.data_dir)
 
     f = open(os.path.join(FLAGS.meta_dir, 'spc_classes.txt'), 'r')
     meta = {}
@@ -114,9 +131,10 @@ def main(_):
             # label = labels[i]
             # class_name = meta[label]
             image_name = image_names[i]
-            full_path = os.path.join('/data/spcup_test', image_name)
+            full_path = os.path.join(FLAGS.data_dir, image_name)
             img = plt.imread(full_path)
-            
+            if img.shape[2] == 4:
+                img = img[:,:,0:3]
             data = np.ndarray(shape=(FLAGS.patches, FLAGS.patch_size, FLAGS.patch_size, 3), dtype=np.float32)
             for n, patch in enumerate(get_patches(img, FLAGS.patches, FLAGS.patch_size)):
                 patch = standardization(patch)

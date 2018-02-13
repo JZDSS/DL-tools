@@ -2,11 +2,11 @@ from multi_gpus import layers
 import tensorflow as tf
 
 
-def block(inputs, num_outputs, weight_decay, scope, is_training, down_sample=False):
+def block(inputs, num_outputs, weight_decay, scope, is_training, down_sample = False):
     with tf.variable_scope(scope):
         num_inputs = inputs.get_shape().as_list()[3]
 
-        res = layers.conv(inputs, num_outputs = num_outputs, kernel_size=[3, 3],
+        res = layers.conv(inputs, num_outputs = num_outputs, kernel_size=[3, 3], activation_fn=tf.nn.elu,
                           strides=[1, 2, 2, 1] if down_sample else [1, 1, 1, 1],
                           scope='conv1', b_norm=True, is_training=is_training, weight_decay=weight_decay)
 
@@ -14,9 +14,9 @@ def block(inputs, num_outputs, weight_decay, scope, is_training, down_sample=Fal
                           scope='conv2', b_norm=True, is_training=is_training, weight_decay=weight_decay)
         if  num_inputs != num_outputs:
             inputs = layers.conv(inputs, num_outputs=num_outputs, kernel_size=[1, 1], activation_fn=None,
-                                 scope='short_cut', strides=[1, 2, 2, 1], b_norm=True, is_training=is_training,
+                                 scope='short_cut', strides=[1, 2, 2,1 ], b_norm=True, is_training=is_training,
                                  weight_decay=weight_decay)
-        res = tf.nn.relu(res + inputs)
+        res = tf.nn.elu(res + inputs)
 
     return res
 
@@ -25,25 +25,23 @@ def build_net(x, is_training, FLAGS):
     n = FLAGS.blocks
     # shape = x.get_shape().as_list()
     with tf.variable_scope('pre'):
-        pre = layers.conv(x, num_outputs=64,  kernel_size = [7, 7], scope='conv', b_norm=True, is_training=is_training,
-                          weight_decay=FLAGS.weight_decay)
-        pre = tf.contrib.layers.max_pool2d(pre, [3, 3], stride=2, padding='SAME', scope='pool')#32
+        pre = layers.conv(x, num_outputs=32,  kernel_size = [3, 3], scope='conv', b_norm=True, is_training=is_training,
+                          weight_decay=FLAGS.weight_decay, activation_fn=tf.nn.elu)
+        # pre = layers.max_pool2d(pre, [2, 2], padding='SAME', scope='pool')
     h = pre
-    for i in range(1, 4):
+    for i in range(1, n + 1):
+        h = block(h, 32, FLAGS.weight_decay, '32_block{}'.format(i), is_training)
+
+    h = block(h, 64, FLAGS.weight_decay, '64_block1', is_training, True)
+    for i in range(2, n + 1):
         h = block(h, 64, FLAGS.weight_decay, '64_block{}'.format(i), is_training)
 
-    h = block(h, 128, FLAGS.weight_decay, '128_block_s2', is_training, True)#16
-    for i in range(1, 4):
+    h = block(h, 128, FLAGS.weight_decay, '128_block1', is_training, True)
+    for i in range(2, n + 1):
         h = block(h, 128, FLAGS.weight_decay, '128_block{}'.format(i), is_training)
-
-    h = block(h, 256, FLAGS.weight_decay, '256_block_s2', is_training, True)
-    for i in range(1, 6):
-        h = block(h, 256, FLAGS.weight_decay, '256_block{}'.format(i), is_training)
     
-    h = block(h, 512, FLAGS.weight_decay, '512_block_s2', is_training, True)
-    for i in range(1, 3):
-        h = block(h, 512, FLAGS.weight_decay, '512_block{}'.format(i), is_training)
     shape = h.get_shape().as_list()
+
     h = tf.contrib.layers.avg_pool2d(h, [shape[1], shape[2]], scope='global_pool')
     shape = h.get_shape().as_list()
     h = layers.conv(h, num_outputs=FLAGS.num_classes, kernel_size=[shape[1], shape[2]], scope='fc1', padding='VALID',

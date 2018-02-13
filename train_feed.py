@@ -9,7 +9,7 @@ from multi_gpus.nets import build
 import cfg
 
 FLAGS = cfg.FLAGS
-
+channels = 3
 
 is_training = tf.placeholder(tf.bool)
 
@@ -31,7 +31,7 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def read_from_tfrecord(tfrecord_file_queue):
+def read_from_tfrecord(tfrecord_file_queue, if_train, thread_id):
     reader = tf.TFRecordReader()
     _, tfrecord_serialized = reader.read(tfrecord_file_queue)
     tfrecord_features = tf.parse_single_example(tfrecord_serialized,
@@ -43,19 +43,68 @@ def read_from_tfrecord(tfrecord_file_queue):
     ground_truth = tf.decode_raw(tfrecord_features['label'], tf.int32)
 
     image = tf.cast(tf.reshape(image, [FLAGS.patch_size, FLAGS.patch_size, 3]), tf.float32)
+    # if FLAGS.aug and if_train:
     if FLAGS.aug:
         image = tf.image.random_flip_up_down(image)
         image = tf.image.random_flip_left_right(image)
-    image = tf.image.per_image_standardization(image)
+        # tmp = image
+        # if thread_id % 5 == 4:
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        #     image = tf.image.random_hue(image, 0.05)
+        # # elif thread_id % 4 == 1:
+        # #     image = tf.image.random_brightness(image, max_delta=63)
+        # #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        # #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+        # #     image = tf.image.random_hue(image, 0.05)
+        # elif thread_id % 5 == 2:
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_hue(image, 0.05)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        # elif thread_id % 5 == 3:
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+        #     image = tf.image.random_hue(image, 0.05)
+        # elif thread_id % 5 == 1:
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_hue(image, 0.05)
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)            
+        # elif thread_id % 4 == 5:
+        #     image = tf.image.random_hue(image, 0.05)
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+        #-------------------------0.963-----------------------
+        # if thread_id % 2 == 0:
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        #     image = tf.image.random_hue(image, 0.05)
+        # else:
+        #     image = tf.image.random_brightness(image, max_delta=63)
+        #     image = tf.image.random_saturation(image, 0.2, 1.8)
+        #     image = tf.image.random_hue(image, 0.05)
+        #     image = tf.image.random_contrast(image, lower=0.2, upper=1.8)
+
+        # image = tf.concat([tmp, image], axis=2)
+        #---------------------------------------------------------
+    # image = tf.image.per_image_standardization(image)
+    if FLAGS.stand == '128':
+        image = (image - 128.0) / 128.0
+    
     ground_truth = tf.reshape(ground_truth, [1])
     return image, ground_truth
 
 
-def input_pipeline(filenames, batch_size, read_threads=2, num_epochs=None):
+def input_pipeline(filenames, batch_size, read_threads=18, num_epochs=None, if_train=True):
     filename_queue = tf.train.string_input_producer(
         filenames, num_epochs=num_epochs, shuffle=True)
-    example_list = [read_from_tfrecord(filename_queue)
-                    for _ in range(read_threads)]
+    example_list = [read_from_tfrecord(filename_queue, if_train, thread_id)
+                    for thread_id in range(read_threads)]
     min_after_dequeue = 10000
     capacity = min_after_dequeue + 3 * batch_size
     example_batch, label_batch = tf.train.shuffle_batch_join(
@@ -89,29 +138,45 @@ def main(_):
     with tf.device('/cpu:0'):
         num_gpus = len(FLAGS.gpu.split(','))
         global_step = tf.Variable(FLAGS.start_step, name='global_step', trainable=False)
-        # learning_rate = tf.train.exponential_decay(0.05, global_step, 2000, 0.9, staircase=True)
-        # learning_rate = tf.train.exponential_decay(0.05, global_step, 1000, 0.94, staircase=True)
-        learning_rate = tf.train.piecewise_constant(global_step, [24000, 48000, 72000, 108000], 
-                                                        [0.01, 0.001, 0.0001, 0.00001, 0.000001])        
-        tf.summary.scalar('learing rate', learning_rate)
+        
+        # learning_rate = tf.train.piecewise_constant(global_step, 
+        #                                             [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000], 
+        #                                             [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0])
+        # step_size = 10000
+        # learning_rate = tf.train.exponential_decay(1.0, global_step, 2*step_size, 0.5, staircase=True)
+        # cycle = tf.floor(1 + tf.cast(global_step, tf.float32) / step_size / 2.)
+        # xx = tf.abs(tf.cast(global_step, tf.float32)/step_size - 2. * tf.cast(cycle, tf.float32) + 1.)
+        # learning_rate = 1e-4 + (1e-1 - 1e-4) * tf.maximum(0., (1-xx))*learning_rate
+        # learning_rate = tf.train.piecewise_constant(global_step, [10000, 70000, 120000, 170000, 220000],
+        #                                                         [0.01, 0.1, 0.001, 0.0001, 0.00001, 0.000001])        
+        # learning_rate = tf.constant(0.001)
+        learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)
+        print('learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)', file=f)
+
         # opt = tf.train.AdamOptimizer(learning_rate)
-        opt = tf.train.MomentumOptimizer(learning_rate, momentum=FLAGS.momentum)
+        opt = tf.train.MomentumOptimizer(learning_rate, momentum=0.9)
         # opt = tf.train.GradientDescentOptimizer(learning_rate)
         # learning_rate = tf.train.exponential_decay(0.01, global_step, 32000, 0.1)
         # opt = tf.train.GradientDescentOptimizer(learning_rate)
-
+        print('opt = tf.train.MomentumOptimizer(learning_rate, momentum=0.9)', file=f)
+        print('weight decay = %e' % FLAGS.weight_decay, file=f)
+        f.flush()
+        tf.summary.scalar('learing rate', learning_rate)
         tower_grads = []
         tower_loss = []
         tower_acc = []
         images_t, labels_t = input_pipeline(
-            tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'train', '*.tfrecords')), FLAGS.batch_size * num_gpus)
+            tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'train', '*.tfrecords')), FLAGS.batch_size * num_gpus, 
+                read_threads=len(os.listdir(os.path.join(FLAGS.data_dir, 'train'))))
         # batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
         #     [images, labels], capacity=2 * num_gpus)
         images_v, labels_v = input_pipeline(
-            tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'valid', '*.tfrecords')), (256 // num_gpus) * num_gpus)
+            tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'valid', '*.tfrecords')), (256 // num_gpus) * num_gpus, 
+                read_threads=len(os.listdir(os.path.join(FLAGS.data_dir, 'valid'))), if_train=False)
         # batch_queue_v = tf.contrib.slim.prefetch_queue.prefetch_queue(
         #     [images_v, labels_v], capacity=2 * num_gpus)
-        image_batch0 = tf.placeholder(tf.float32, [None, FLAGS.patch_size, FLAGS.patch_size, 3], 'imgs')
+        
+        image_batch0 = tf.placeholder(tf.float32, [None, FLAGS.patch_size, FLAGS.patch_size, channels], 'imgs')
         label_batch0 = tf.placeholder(tf.int32, [None, 1], 'labels')
         image_batch = tf.split(image_batch0, num_gpus, 0)
         label_batch = tf.split(label_batch0, num_gpus, 0)
@@ -151,6 +216,7 @@ def main(_):
             with tf.control_dependencies(update_ops):
                 apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
             train_op = tf.group(apply_gradient_op, variables_averages_op)
+            p_relu_update = tf.get_collection('p_relu')
             # train_op = apply_gradient_op
 
 
@@ -159,7 +225,7 @@ def main(_):
         summary_op = tf.summary.merge_all()
 
         saver = tf.train.Saver(name="saver", max_to_keep=10)
-        saver_best = tf.train.Saver(name='best', max_to_keep=100)
+        saver_best = tf.train.Saver(name='best', max_to_keep=200)
         with tf.Session(config=config) as sess:
             sess.run(tf.local_variables_initializer())
             coord = tf.train.Coordinator()
@@ -169,7 +235,8 @@ def main(_):
                 saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
             else:
                 sess.run(tf.global_variables_initializer())
-
+            if FLAGS.start_step != 0:
+                sess.run(tf.assign(global_step, FLAGS.start_step))
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
             train_writer.flush()
             valid_writer = tf.summary.FileWriter(FLAGS.log_dir + '/valid', sess.graph)
@@ -182,10 +249,14 @@ def main(_):
                 def get_batch(set, on_training):
                     if set == 'train':
                         img, lb = sess.run([images_t, labels_t])
+                        # x = np.random.randint(0, 64)
+                        # y = np.random.randint(0, 64)
+                        # img = np.roll(np.roll(img, x, 1), y, 2)
                     elif set == 'valid':
                         img, lb = sess.run([images_v, labels_v])
                     else:
                         raise RuntimeError('Unknown set name')
+                    
                     feed_dict = {}
                     feed_dict[image_batch0] = img
                     feed_dict[label_batch0] = lb
@@ -212,6 +283,7 @@ def main(_):
                         saver_best.save(sess, os.path.join(FLAGS.ckpt_dir, 'best', FLAGS.model_name), global_step=i)
                     f.flush()
                 sess.run(train_op, feed_dict=get_batch('train', True))
+                sess.run(p_relu_update)
 
             coord.request_stop()
             coord.join(threads)

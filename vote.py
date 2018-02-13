@@ -17,24 +17,36 @@ def main():
         meta[class_name] = int(label)
         line = f.readline()
     f.close()
-    truth = np.load('truth.npy')
-    preds = os.listdir(FLAGS.dir)
 
-    res = np.zeros(shape=[2750*9, 10])
+    truth = []
+    for name in os.listdir('/data/qiyao/valid_imgs'):
+        for key in meta:
+            if key in name:
+                truth.append(meta[key])
+                break
+
+    truth = np.array(truth)    # truth = np.load('truth.npy')
+    preds = os.listdir(FLAGS.dir)
+    print(preds)
+    res = np.zeros(shape=[5040, 10], dtype=np.float32)
     acc = []
     for file in preds:
+        tmp = np.zeros(shape=[5040, 10], dtype=np.float32)
         curr = []
         f = open(os.path.join(FLAGS.dir, file))
-        f.readline()
+        line = f.readline()
         n = 0
         while line:
-            l = f.readline().split(',')[1].split('\n')[0]
-            res[n, meta[l]] += 1
+            line = f.readline()
+            if not ',' in line:
+                break
+            l = line.split(',')[1].split('\n')[0]
+            tmp[n, meta[l]] += 1
             n = n + 1
             curr.append(meta[l])
         acc.append(np.mean(curr == truth))
-
-    voted = np.argmax(res, axis=2)
+        res += tmp
+    voted = np.argmax(res, axis=1)
     acc.append(np.mean(voted == truth))
     print(acc)
 
@@ -45,7 +57,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--dir',
         type=str,
-        default='./predictions/',
+        default='/home/amax/QiYao/multi-gpus/official/valid',
         help='Directory where all prediction files are stored'
     )
     parser.add_argument(

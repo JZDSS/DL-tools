@@ -19,7 +19,7 @@ flags.DEFINE_integer('max_steps', 150000, 'max steps')
 flags.DEFINE_integer('start_step', 0, 'start steps')
 flags.DEFINE_string('model_name', None, '')
 flags.DEFINE_string('gpu', '3', '')
-flags.DEFINE_integer('blocks', 5, '')
+flags.DEFINE_integer('blocks', 3, '')
 flags.DEFINE_string('out_file', '', '')
 flags.DEFINE_integer('patch_size', 64, '')
 flags.DEFINE_string('type', '', '')
@@ -121,12 +121,12 @@ def main(_):
         images, labels = input_pipeline(
             tf.train.match_filenames_once(os.path.join(FLAGS.data_dir, 'valid', '*.tfrecords')),
             int(FLAGS.batch_size/num_gpus))
-        batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
-            [images, labels], capacity=2 * num_gpus)
+        image_batch = tf.placeholder(tf.float32, [None, FLAGS.patch_size, FLAGS.patch_size, 3], 'imgs')
+        label_batch = tf.placeholder(tf.int32, [None, 1], 'labels')
         for i in range(num_gpus):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('tower_%d' % i) as scope:
-                    image_batch, label_batch = batch_queue.dequeue()
+                    # image_batch, label_batch = batch_queue.dequeue()
                     # image_batch = tf.ones(shape=[128, 64, 64, 3], dtype=tf.float32)
                     # label_batch = tf.ones(shape=[128, 1], dtype=tf.int32)
                     logits = build.net(image_batch, False, FLAGS)
@@ -169,10 +169,10 @@ def main(_):
         # summary_op = tf.summary.merge_all()
         # init = tf.global_variables_initializer()
         summary_op = tf.summary.merge_all()
-        variable_averages = tf.train.ExponentialMovingAverage(0.9999)
-        variables_to_restore = variable_averages.variables_to_restore()
-        saver = tf.train.Saver(variables_to_restore, name='saver')
-        # saver = tf.train.Saver(name="saver")
+        # variable_averages = tf.train.ExponentialMovingAverage(0.9999)
+        # variables_to_restore = variable_averages.variables_to_restore()
+        # saver = tf.train.Saver(variables_to_restore, name='saver')
+        saver = tf.train.Saver(name="saver")
 
         with tf.Session(config=config) as sess:
             sess.run(tf.local_variables_initializer())
@@ -191,7 +191,9 @@ def main(_):
                     # loss0 = sess.run([total_loss], feed_dict=feed_dict(False, False))
                     # test_writer.add_summary(summary, i)
                     # feed[is_training] = FLAGS
-                acc, loss, summ = sess.run([accuracy, batch_loss, summary_op])
+                img, lb = sess.run([images, labels])
+                acc, loss, summ = sess.run([accuracy, batch_loss, summary_op], feed_dict={image_batch: img, label_batch: lb})
+                # acc, loss, summ = sess.run([accuracy, batch_loss, summary_op], feed_dict={image_batch: np.ones(shape = [256, 64, 64, 3], dtype=np.float32), label_batch: np.ones(shape=[256, 1], dtype=np.int32)})
                 train_writer.add_summary(summ, i)
                 print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), file=f)
                 # print('step %d: train_acc=%f, train_loss=%f; test_acc=%f, test_loss=%f' % (i, acc1, loss1, acc0, loss0),
