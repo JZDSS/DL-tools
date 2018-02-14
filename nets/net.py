@@ -5,5 +5,5 @@ class Net(object):
     def build(self, inputs):
         raise NotImplementedError()
 
-    def build_batch_norm_update_ops(self):
+    def get_update_ops(self):
         raise NotImplementedError()
