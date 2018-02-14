@@ -4,7 +4,7 @@ from __future__ import division
 import tensorflow as tf
 from tensorflow.python.training import moving_averages
 import math
-import cfg
+
 
 def _variable_on_cpu(name, shape, initializer, trainable):
     with tf.device('/cpu:0'):
@@ -22,15 +22,64 @@ def _create_variable(name, shape, initializer, weight_decay=None, trainable=True
         tf.add_to_collection(tf.GraphKeys.REGULARIZATION_LOSSES, regularization)
     return var
 
-def p_relu(x):
-    alpha = _create_variable('alpha', [], initializer=tf.constant_initializer(0.01))
-    res = tf.nn.relu(x) + alpha * (x - tf.abs(x)) * 0.5
-    update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)), 
-                           lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
-                           lambda: tf.assign(alpha, alpha))
-    tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_alpha)
+def p_relu(x, name='p_relu'):
+    with tf.variable_scope(name):
+        alpha = _create_variable('alpha', [], initializer=tf.constant_initializer(0.25))
+        res = tf.nn.relu(x) - alpha * (tf.nn.relu(-x))
+        update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)), 
+                               lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
+                               lambda: tf.assign(alpha, alpha))
+        tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_alpha)
     return res
 
+def p_relu_channel_wise(x, name='p_relu_channel_wise'):
+    shape = x.get_shape().as_list()
+    with tf.variable_scope(name):
+        alpha = _create_variable('alpha', shape[3], initializer=tf.constant_initializer(0.25))
+        res = tf.nn.relu(x) - alpha * (tf.nn.relu(-x))
+        # update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)), 
+        #                        lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
+        #                        lambda: tf.assign(alpha, alpha))
+        # tf.add_to_collection('p_relu', update_alpha)
+    return res
+    # with tf.variable_scope(name):
+    #     shape = x.get_shape().as_list()
+    #     xs = tf.split(x, shape[3], 3)
+    #     res = []
+    #     for i, x in enumerate(xs):
+    #         alpha = _create_variable('alpha_{}'.format(i), [], initializer=tf.constant_initializer(0.25))
+    #         y = tf.nn.relu(x) + alpha * (x - tf.abs(x)) * 0.5
+    #         update_alpha = tf.cond(tf.less(alpha, tf.constant(0, dtype=tf.float32)),
+    #                                lambda: tf.assign(alpha, tf.constant(0, dtype=tf.float32)),
+    #                                lambda: tf.assign(alpha, alpha))
+    #         tf.add_to_collection('p_relu', update_alpha)
+    #         res.append(y)
+    #     res = tf.concat(res, 3)
+    # return res
+
+# def batch_norm(x,
+#                decay=0.999,
+#                epsilon=0.001,
+#                is_training=True,
+#                scope=None,
+#                center=True,
+#                scale=True):
+#     with tf.variable_scope(scope):
+#         beta = tf.Variable(tf.constant(0.0, shape=[x.shape[-1]]), name='beta', trainable=center)
+#         gamma = tf.Variable(tf.constant(1.0, shape=[x.shape[-1]]), name='gamma', trainable=scale)
+#         axises = list(range(len(x.shape) - 1))
+#         batch_mean, batch_var = tf.nn.moments(x, axises, name='moments')
+#         ema = tf.train.ExponentialMovingAverage(decay=decay)
+
+#         def mean_var_with_update():
+#             ema_apply_op = ema.apply([batch_mean, batch_var])
+#             with tf.control_dependencies([ema_apply_op]):
+#                 return tf.identity(batch_mean), tf.identity(batch_var)
+
+#         mean, var = tf.cond(is_training, mean_var_with_update,
+#                             lambda: (ema.average(batch_mean), ema.average(batch_var)))
+#         normed = tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon)
+#     return normed
 def batch_norm(x,
                decay=0.999,
                epsilon=0.001,
@@ -38,7 +87,6 @@ def batch_norm(x,
                scope=None,
                center=True,
                scale=False):
-    num_gpus = len(set(cfg.FLAGS.gpu.split(',')))
     with tf.variable_scope(scope):
         is_training = tf.convert_to_tensor(is_training, dtype=tf.bool, name='is_training')
         x_shape = x.get_shape().as_list()
@@ -67,12 +115,8 @@ def batch_norm(x,
         summ = tf.summary.histogram('variance', variance, collections='var')
         tf.add_to_collection('var', summ)
 
-        with tf.name_scope("update_moving_mean") as scope:
-            decay = tf.convert_to_tensor(decay, name="decay")
-            update_delta = (moving_mean_old - mean) * (1.0 - decay) - \
-                           moving_mean_old * (decay - tf.pow(decay, num_gpus) / num_gpus)
-            update_moving_mean = tf.assign_sub(moving_mean, update_delta, name=scope)
-
+        update_moving_mean = moving_averages.assign_moving_average(
+            moving_mean, mean, decay, name='update_moving_mean')
         update_moving_variance = moving_averages.assign_moving_average(
             moving_variance, variance, decay, name='update_moving_variance')
         tf.add_to_collection(tf.GraphKeys.UPDATE_OPS, update_moving_mean)
@@ -92,7 +136,7 @@ def conv(x,
          kernel_size,
          strides=[1, 1, 1, 1],
          padding='SAME',
-         weight_decay=0.00004,
+         weight_decay=0.0001,
          b_norm=False,
          activation_fn=tf.nn.relu,
          scope=None,
@@ -104,6 +148,7 @@ def conv(x,
 
         w = _create_variable('weights', (kernel_size[0], kernel_size[1], x_shape[-1], num_outputs),
                              tf.truncated_normal_initializer(stddev=math.sqrt(2/(kernel_size[0]*kernel_size[1]*x_shape[-1]))),
+                             # tf.contrib.layers.xavier_initializer(),
                              weight_decay, trainable)
 
         y = tf.nn.conv2d(x, w, strides, padding)
