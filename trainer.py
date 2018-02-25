@@ -1,7 +1,7 @@
 import os
 import tensorflow as tf
 
-class Trainer:
+class Trainer(object):
     def __init__(self, net, gpus=[0]):
         self.gpus = list(set(gpus))
         self.num_gpus = len(self.gpus)
@@ -10,18 +10,12 @@ class Trainer:
         self._init_gpus()
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-    def _loss_fn(self, logits, labels, *args, **kwargs):
-        # Define loss and add to tf.GraphKeys.LOSSES collection
-        # You must add loss to tf.GraphKeys.LOSSES collection as well if you
-        # want to redefine loss function. You can use set_loss_fn(your_loss_fn) to
-        # enable your custom loss function.
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-        loss = tf.reduce_mean(loss)
-        tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
-        return loss
-
-    def set_loss_fn(self, fn):
-        self.loss_fn = fn
+    # def _loss_fn(self, logits, labels, *args, **kwargs):
+    #     # Define loss and add to tf.GraphKeys.LOSSES collection
+    #     # You must add loss to tf.GraphKeys.LOSSES collection as well if you
+    #     # want to redefine loss function. You can use set_loss_fn(your_loss_fn) to
+    #     # enable your custom loss function.
+    #     raise NotImplementedError
 
     def _average_gradients(self, tower_grads):
         average_grads = []
@@ -49,9 +43,10 @@ class Trainer:
         self.sess = tf.Session(config=config)
 
     def _learning_rate(self, cfg):
-        pass
+        raise NotImplementedError
     def _optimizer(self, cfg):
-        pass
+        raise NotImplementedError
+
     def build_graph(self, lr_cfg, opt_cfg):
         with tf.device('/cpu:0'):
             num_gpus = self.num_gpus
@@ -103,13 +98,12 @@ class Trainer:
                     apply_gradient_op = opt.apply_gradients(grads, global_step=self.global_step)
                 train_op = tf.group(apply_gradient_op, variables_averages_op)
 
-
-
     def __del__(self):
-        try:
-            self.sess.stop()
-        except Exception as e:
-            print(e)
+        if self.sess is not None:
+            try:
+                self.sess.stop()
+            except Exception as e:
+                print(e)
 import cfg
 from nets.resnet import *
 flags = cfg.FLAGS
