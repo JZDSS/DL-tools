@@ -5,14 +5,29 @@ from nets import layers
 
 
 class ResNet(net.Net):
+    """
+    implement some ResNets mentioned by Deep Residual Learning for Image Recognition.
+
+    Attributes:
+        type: An optional string from: "vgg", "cifar10", "100" and "151". Defaults to None.
+        The type of ResNet. With type 'vgg', the net is modified from vgg16, and 'cifar10'
+        means the net architecture is same with the net used in cifar10 experiments in the
+        paper. Alternatively, '100' and '151' means 100 layers ResNet and 151 layers ResNet
+        respectively.
+        blocks:
+        is_training:
+        weight_decay:
+        num_classes:
+    """
+
     def __init__(self, flags):
         super(ResNet, self).__init__('ResNet')
-        self.subtype = flags.subtype
+        self.type = flags.type
         self.blocks = flags.blocks
-        self.num_gpus = len(set(flags.gpu.split(',')))
+        # self.num_gpus = len(set(flags.gpu.split(',')))
         self.blocks = flags.blocks
         self.is_training = tf.placeholder(tf.bool)
-        self.architecture = []
+        # self.architecture = []
         self.weight_decay = flags.weight_decay
         self.num_classes = flags.num_classes
         # self.output = None
@@ -43,7 +58,7 @@ class ResNet(net.Net):
         num_classes = self.num_classes
         block = self._block
         architecture = self.architecture
-        if self.subtype == 'vgg':
+        if self.type == 'vgg':
             with tf.variable_scope('pre'):
                 pre = layers.conv(inputs, num_outputs=64, kernel_size=[7, 7], scope='conv', b_norm=True,
                                   is_training=is_training,
@@ -75,7 +90,7 @@ class ResNet(net.Net):
                             b_norm=True, is_training=is_training, weight_decay=weight_decay, activation_fn=None)
             architecture.append('fc')
             res = tf.reshape(h, [-1, num_classes])
-        elif self.subtype == 'cifar10':
+        elif self.type == 'cifar10':
             n = self.blocks
             # shape = x.get_shape().as_list()
             with tf.variable_scope('pre'):
@@ -109,18 +124,18 @@ class ResNet(net.Net):
                             b_norm=True, is_training=self.is_training, weight_decay=self.weight_decay, activation_fn=None)
             self.architecture.append('fc\n')
             res = tf.reshape(h, [-1, self.num_classes])
-        elif self.subtype == '100':
+        elif self.type == '100':
             pass
-        elif self.subtype == '151':
+        elif self.type == '151':
             pass
         else:
-            raise RuntimeError('Unknown ResNet subtype!')
+            raise RuntimeError('Unknown ResNet type!')
         # self.output = res
         # self.probability = tf.nn.softmax(self.output)
         return res
 
-    def get_norm_update_ops(self):
-        pass
+    # def get_norm_update_ops(self):
+    #     pass
 
     def __str__(self):
         return ''.join(self.architecture)
