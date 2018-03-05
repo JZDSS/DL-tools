@@ -8,3 +8,5 @@ stand_alone/
 logs/
 ignore/
 *.caffemodel
+*.npy
+
