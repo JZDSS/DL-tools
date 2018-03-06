@@ -25,17 +25,15 @@ def random_horizontally_flip_with_bbox(image, bboxes, seed=None):
         bboxes = tf.stack([bboxes[:, 0], 1 - bboxes[:, 3],
                            bboxes[:, 2], 1 - bboxes[:, 1]], axis=-1)
         return bboxes
-
-    image = tf.convert_to_tensor(image, name='image')
-
-    uniform_random = tf.random_uniform([], 0, 1.0, seed=seed)
-    mirror_cond = tf.less(uniform_random, .5)
-    image = tf.cond(mirror_cond,
-                       lambda: tf.reverse(image, [1]),
-                       lambda: image)
-    bboxes = tf.cond(mirror_cond,
-                     lambda: flip_bboxes(bboxes),
-                     lambda: bboxes)
+    with tf.name_scope('random_flip'):
+        uniform_random = tf.random_uniform([], 0, 1.0, seed=seed)
+        mirror_cond = tf.less(uniform_random, .5)
+        image = tf.cond(mirror_cond,
+                           lambda: tf.reverse(image, [1]),
+                           lambda: image)
+        bboxes = tf.cond(mirror_cond,
+                         lambda: flip_bboxes(bboxes),
+                         lambda: bboxes)
     return image, bboxes
 
 
@@ -71,17 +69,33 @@ def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7,
         a fraction of the supplied image within in this range.
     :return: Cropped image and transformed bounding boxes.
     """
-    begin, size, bbox_for_slice = tf.image.sample_distorted_bounding_box(
-                                tf.shape(img),
-                                bounding_boxes=tf.expand_dims(bboxes, 0),
-                                min_object_covered=minimum_jaccard_overlap,
-                                aspect_ratio_range=aspect_ratio_range,
-                                area_range=area_range,
-                                use_image_if_no_bounding_boxes=True,
-                                seed=seed, seed2=seed2)
-    cropped_image = tf.slice(img, begin, size)
-    transformed_bboxes = _transform_bboxes(bboxes, bbox_for_slice)
+    with tf.name_scope('random_crop'):
+        begin, size, bbox_for_slice = tf.image.sample_distorted_bounding_box(
+                                    tf.shape(img),
+                                    bounding_boxes=tf.expand_dims(bboxes, 0),
+                                    min_object_covered=minimum_jaccard_overlap,
+                                    aspect_ratio_range=aspect_ratio_range,
+                                    area_range=area_range,
+                                    use_image_if_no_bounding_boxes=True,
+                                    seed=seed, seed2=seed2)
+        cropped_image = tf.slice(img, begin, size)
+        transformed_bboxes = _transform_bboxes(bboxes, bbox_for_slice)
     return cropped_image, transformed_bboxes
+
+
+def resize(image, size):
+    with tf.name_scope('resize'):
+        image = tf.image.resize_images(tf.expand_dims(image, 0), size)
+        image = tf.squeeze(image)
+    return image
+
+
+def pre_process(image, bboxes, size):
+    with tf.name_scope('pre_process'):
+        image, bboxes = random_crop_with_bbox(image, bboxes)
+        image, bboxes = random_horizontally_flip_with_bbox(image, bboxes)
+        image = resize(image, size)
+    return image, bboxes
 
 
 def main():
@@ -92,12 +106,11 @@ def main():
            [0.650, 0.01, 0.997, 0.134]]
     x = tf.placeholder(tf.float32, shape=[None, None, 3])
     b = tf.placeholder(tf.float32, shape=[2, 4])
-    cropped, transformed = random_crop_with_bbox(x, b)
-    cropped, transformed = random_horizontally_flip_with_bbox(cropped, transformed)
-    drawed = tf.image.draw_bounding_boxes(tf.expand_dims(cropped, 0), tf.expand_dims(transformed, 0))
+    processed_image, processed_bbox = pre_process(x, b, (300, 300))
+    drawed = tf.image.draw_bounding_boxes(tf.expand_dims(processed_image, 0), tf.expand_dims(processed_bbox, 0))
     with tf.Session() as sess:
         while True:
-            t, to_show = sess.run([transformed, drawed], feed_dict={x: img, b: bbx})
+            t, to_show = sess.run([processed_bbox, drawed], feed_dict={x: img, b: bbx})
             print(t)
             cv2.imshow("a", to_show.astype(np.uint8)[0])
             cv2.waitKey(0)
