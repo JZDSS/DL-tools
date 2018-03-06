@@ -26,8 +26,12 @@ class vgg16_ssd(net.Net):
         y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
         y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, 'SAME', scope='conv5')
         y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool5')
-        y = layers.fully_connected(layers.flatten(y), 4096, scope='fc6')
-        y = layers.fully_connected(layers.flatten(y), 4096, scope='fc7')
+        # change pool5 from 2 × 2 − s2 to 3 × 3 − s1
+        # y = layers.max_pool2d(y, [3, 3], 1, 'SAME', scope='pool5')
+        # y = layers.fully_connected(layers.flatten(y), 4096, scope='fc6')
+        # y = layers.fully_connected(layers.flatten(y), 4096, scope='fc7')
+        y = layers.conv2d(y, 4096, [7, 7], 1, 'VALID', scope='fc6')
+        y = layers.conv2d(y, 4096, [1, 1], 1, 'VALID', scope='fc7')
         y = layers.fully_connected(layers.flatten(y), 1000, scope='fc8')
         return y
 
@@ -57,8 +61,11 @@ class vgg16_ssd(net.Net):
             with tf.variable_scope(scope, reuse=True):
                 weights = tf.get_variable('weights')
                 biases = tf.get_variable('biases')
-                w_init_op = weights.assign(weight_dict[scope.split('/')[-1]]['weights'])
-                b_init_op = biases.assign(weight_dict[scope.split('/')[-1]]['biases'])
+                w = weight_dict[scope.split('/')[-1]]['weights']
+                b = weight_dict[scope.split('/')[-1]]['biases']
+                w = np.reshape(w, weights.shape)
+                w_init_op = weights.assign(w)
+                b_init_op = biases.assign(b)
                 tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
                 tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
 
@@ -82,7 +89,3 @@ with tf.Session() as sess:
     #     print(sess.run(tf.get_variable('weights')))
     print(sess.run(tf.argmax(pred, 1), feed_dict={x: img}))
 
-
-
-
-a = 1
