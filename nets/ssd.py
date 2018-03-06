@@ -3,10 +3,9 @@ import tensorflow as tf
 
 def smooth_l1_loss(x):
     """
-    Computes smooth l1 loss: x^2 / 2 if abs(x) < 1, abs(x) - 0.5 otherwise.
+    Computes smooth l1 loss: x^2 / 2 if abs(x) < 1, abs(x) - 0.5 otherwise and add to tf.GraphKeys.LOSSES collection.
     See [Fast R-CNN](https://arxiv.org/abs/1504.08083)
-    :param x:
-    :return:
+    :param x: An input Tensor to calculate smooth L1 loss.
     """
     square_loss = 0.5 * x ** 2
     absolute_loss = tf.abs(x)
@@ -14,8 +13,30 @@ def smooth_l1_loss(x):
     tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
 
 
-def random_flip_left_right_with_bbox():
-    pass
+def random_horizontally_flip_with_bbox(image, bboxes, seed=None):
+    """
+
+    :param image:
+    :param bboxes:
+    :param seed:
+    :return:
+    """
+    def flip_bboxes(bboxes):
+        bboxes = tf.stack([bboxes[:, 0], 1 - bboxes[:, 3],
+                           bboxes[:, 2], 1 - bboxes[:, 1]], axis=-1)
+        return bboxes
+
+    image = tf.convert_to_tensor(image, name='image')
+
+    uniform_random = tf.random_uniform([], 0, 1.0, seed=seed)
+    mirror_cond = tf.less(uniform_random, .5)
+    image = tf.cond(mirror_cond,
+                       lambda: tf.reverse(image, [1]),
+                       lambda: image)
+    bboxes = tf.cond(mirror_cond,
+                     lambda: flip_bboxes(bboxes),
+                     lambda: bboxes)
+    return image, bboxes
 
 
 def _transform_bboxes(bboxes, bbox_ref):
@@ -32,7 +53,9 @@ def _transform_bboxes(bboxes, bbox_ref):
     return transformed_bboxes
 
 
-def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7, aspect_ratio_range=(0.5, 2), area_range=(0.1, 1.0)):
+def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7,
+                          aspect_ratio_range=(0.5, 2), area_range=(0.1, 1.0),
+                          seed=None, seed2=None):
     """
     Random crop the image and transfrom the bounding boxes to associated with the cropped image.
 
@@ -54,7 +77,8 @@ def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7, aspect_ratio
                                 min_object_covered=minimum_jaccard_overlap,
                                 aspect_ratio_range=aspect_ratio_range,
                                 area_range=area_range,
-                                use_image_if_no_bounding_boxes=True)
+                                use_image_if_no_bounding_boxes=True,
+                                seed=seed, seed2=seed2)
     cropped_image = tf.slice(img, begin, size)
     transformed_bboxes = _transform_bboxes(bboxes, bbox_for_slice)
     return cropped_image, transformed_bboxes
@@ -69,6 +93,7 @@ def main():
     x = tf.placeholder(tf.float32, shape=[None, None, 3])
     b = tf.placeholder(tf.float32, shape=[2, 4])
     cropped, transformed = random_crop_with_bbox(x, b)
+    cropped, transformed = random_horizontally_flip_with_bbox(cropped, transformed)
     drawed = tf.image.draw_bounding_boxes(tf.expand_dims(cropped, 0), tf.expand_dims(transformed, 0))
     with tf.Session() as sess:
         while True:
