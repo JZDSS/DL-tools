@@ -52,7 +52,7 @@ def _transform_bboxes(bboxes, bbox_ref):
     return transformed_bboxes
 
 
-def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7,
+def random_crop_with_bbox(img, bboxes, labels, minimum_jaccard_overlap=0.7,
                           aspect_ratio_range=(0.5, 2), area_range=(0.1, 1.0),
                           seed=None, seed2=None):
     """
@@ -61,6 +61,7 @@ def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7,
     :param img: The original image, a 3-D Tensor with shape [height, width, channels].
     :param bboxes: 2-D Tensor of type tf.float32 with shape [num_boxes, 4], the coordinates  of 2ed dimension
         is ordered [min_y, min_x, max_y, max_x], which are normalized to [0, 1] by dividing image height and width.
+    :param labels: Labels.
     :param minimum_jaccard_overlap: A Tensor of type float32. Defaults to 0.7. The cropped area of the image must
         contain at least this fraction of any bounding box supplied. The value of this parameter should be non-negative.
         In the case of 0, the cropped area does not need to overlap any of the bounding boxes supplied.
@@ -80,8 +81,10 @@ def random_crop_with_bbox(img, bboxes, minimum_jaccard_overlap=0.7,
                                     use_image_if_no_bounding_boxes=True,
                                     seed=seed, seed2=seed2)
         cropped_image = tf.slice(img, begin, size)
+        bboxes, labels = drop_small_bboxes(bboxes, bbox_for_slice, labels)
         transformed_bboxes = _transform_bboxes(bboxes, bbox_for_slice)
-    return cropped_image, transformed_bboxes
+    return cropped_image, transformed_bboxes, labels
+
 
 
 def resize(image, size):
@@ -91,12 +94,35 @@ def resize(image, size):
     return image
 
 
-def pre_process(image, bboxes, size):
+def drop_small_bboxes(bboxes, bbox_for_slice, labels):
+    bbox_for_slice = tf.reshape(bbox_for_slice, [-1])
+    def intersection(bbox1, bbox2):
+        # int for intersection
+        int_ymin = tf.maximum(bbox1[:, 0], bbox2[0])
+        int_xmin = tf.maximum(bbox1[:, 1], bbox2[1])
+        int_ymax = tf.minimum(bbox1[:, 2], bbox2[2])
+        int_xmax = tf.minimum(bbox1[:, 3], bbox2[3])
+        h = tf.maximum(int_ymax - int_ymin, 0.)
+        w = tf.maximum(int_xmax - int_xmin, 0.)
+
+        # vol for volume.
+        vol_int = h * w
+        return vol_int
+    vol_int = intersection(bboxes, bbox_for_slice)
+    vol_bboxes = (bboxes[:, 3] - bboxes[:, 1] )*(bboxes[:, 2] - bboxes[:, 0])
+    scores = vol_int / vol_bboxes
+    mask = scores > 0.5
+    bboxes = tf.boolean_mask(bboxes, mask)
+    labels = tf.boolean_mask(labels, mask)
+
+    return bboxes, labels
+
+def pre_process(image, bboxes, size, labels):
     with tf.name_scope('pre_process'):
-        image, bboxes = random_crop_with_bbox(image, bboxes)
+        image, bboxes, labels = random_crop_with_bbox(image, bboxes, labels)
         image, bboxes = random_horizontally_flip_with_bbox(image, bboxes)
         image = resize(image, size)
-    return image, bboxes
+    return image, bboxes, labels
 
 
 def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales, aspect_ratios, feature_map_size, threshold=0.5):
@@ -223,7 +249,7 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
 
 
 
-MODE = 'bbx2gtth'
+MODE = 'data_augmentation'
 
 
 def main():
@@ -234,9 +260,10 @@ def main():
         img = cv2.imread('/home/yqi/Desktop/workspace/PycharmProjects/VOCdevkit/VOC2007/JPEGImages/000005.jpg')
         bbx = [[0.562, 0.526, 0.904, 0.648],
                [0.650, 0.01, 0.997, 0.134]]
+        labels = [1, 2]
         x = tf.placeholder(tf.float32, shape=[None, None, 3])
         b = tf.placeholder(tf.float32, shape=[2, 4])
-        processed_image, processed_bbox = pre_process(x, b, (300, 300))
+        processed_image, processed_bbox, labels= pre_process(x, b, (300, 300), labels)
         drawed = tf.image.draw_bounding_boxes(tf.expand_dims(processed_image, 0), tf.expand_dims(processed_bbox, 0))
         with tf.Session() as sess:
             while True:
