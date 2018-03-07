@@ -137,16 +137,20 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
     """
     locations_all = []
     labels_all = []
+
+    # for every feature map
     for i, size in enumerate(feature_map_size):
+        # d for default boxes(anchors)
+        # x and y coordinate of centers of every cell, normalized to [0, 1]
         d_cy, d_cx = np.mgrid[0:size[0], 0:size[1]].astype(np.float32)
         d_cx = (d_cx + 0.5) / size[1]
         d_cy = (d_cy + 0.5) / size[0]
         d_cx = np.expand_dims(d_cx, axis=-1)
         d_cy = np.expand_dims(d_cy, axis=-1)
 
+        # calculate width and heights
         d_w = []
         d_h = []
-
         scale = anchor_scales[i]
         # two aspect ratio 1 anchor scales
         d_w.append(ext_anchor_scales[i])
@@ -159,12 +163,13 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
             d_h.append(scale / np.sqrt(ratio))
         d_w = np.array(d_w, dtype=np.float32)
         d_h = np.array(d_h, dtype=np.float32)
+
         d_ymin = d_cy - d_h/2
         d_ymax = d_cy + d_h/2
         d_xmin = d_cx - d_w/2
         d_xmax = d_cx + d_w/2
-        # print(d_ymin[:,:,0])
         vol_anchors = (d_xmax - d_xmin) * (d_ymax - d_ymin)
+
         def calc_jaccard(bbox):
             """
             Calculate jaccard overlap with all feature_map_size[0]*feature_map_size[1]*num_anchors anchors
@@ -187,10 +192,8 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
 
             return jaccard
 
-
         shape = size + [len(d_w)]
         final_labels = tf.zeros(shape, dtype=tf.int32)
-        # final_bboxes = tf.zeros(size + [len(d_w), 4], dtype=tf.float32)
         final_scores = tf.zeros(shape, dtype=tf.float32)
         final_ymin = tf.zeros(shape, dtype=tf.float32)
         final_xmin = tf.zeros(shape, dtype=tf.float32)
@@ -225,7 +228,6 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
             tf.while_loop(cond, body,
                           [n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax])
 
-
         g_cx = (final_xmax + final_xmin) / 2
         g_cy = (final_ymax + final_ymin) / 2
         g_w = final_xmax - final_xmin
@@ -238,7 +240,7 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
 
         locations_all.append(tf.stack([g_cx, g_cy, g_w, g_h], -1))
         labels_all.append(final_labels)
-        ass = tf.assert_equal(tf.not_equal(final_labels, 0), tf.greater(final_scores, threshold))
+        # ass = tf.assert_equal(tf.not_equal(final_labels, 0), tf.greater(final_scores, threshold))
 
         # with tf.Session() as sess:
         #     tf.global_variables_initializer().run()
@@ -263,12 +265,12 @@ def main():
         labels = [1, 2]
         x = tf.placeholder(tf.float32, shape=[None, None, 3])
         b = tf.placeholder(tf.float32, shape=[2, 4])
-        processed_image, processed_bbox, labels= pre_process(x, b, (300, 300), labels)
+        processed_image, processed_bbox, precessed_labels= pre_process(x, b, (300, 300), labels)
         drawed = tf.image.draw_bounding_boxes(tf.expand_dims(processed_image, 0), tf.expand_dims(processed_bbox, 0))
         with tf.Session() as sess:
             while True:
-                t, to_show = sess.run([processed_bbox, drawed], feed_dict={x: img, b: bbx})
-                print(t)
+                l, t, to_show = sess.run([precessed_labels, processed_bbox, drawed], feed_dict={x: img, b: bbx})
+                print(l, ':', t)
                 cv2.imshow("a", to_show.astype(np.uint8)[0])
                 k = cv2.waitKey(0)
                 if k == ord('q'):
