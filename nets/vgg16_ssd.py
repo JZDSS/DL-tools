@@ -1,15 +1,37 @@
+from __future__ import division
 import tensorflow as tf
 from tensorflow.contrib import layers
 from tensorflow.contrib.framework import arg_scope
 from nets import net, ssd
 import numpy as np
 
+# s_k = s_min + (s_max - s_min)/(m - 1)(k - 1)
+default_anchor_scales = [0.2, 0.34, 0.48, 0.62, 0.76, 0.9]        # of original image size
+# s_k^{'} = sqrt(s_k*s_k+1)
+default_ext_anchor_scales = [0.26, 0.28, 0.43, 0.60, 0.78, 0.98]  # of original image size
+# omitted aspect ratio 1
+default_aspect_ratios = [[1/2, 2],                          # conv4_3
+                         [1/3, 1/2, 2, 3],                  # conv7
+                         [1/3, 1/2, 2, 3],                  # conv8_2
+                         [1/3, 1/2, 2, 3],                  # conv9_2
+                         [1 / 2, 2],                        # conv10_2
+                         [1 / 2, 2]]                        # conv11_2
+
 class vgg16_ssd(net.Net):
 
-    def __init__(self, vgg16_path='../ssd/vgg16/vgg16.npy', weight_decay=0.0005):
+    def __init__(self, vgg16_path='../ssd/vgg16/vgg16.npy', weight_decay=0.0005,
+                 num_classes=20, anchor_scales=default_anchor_scales, aspect_ratios=default_aspect_ratios,
+                 ext_anchors=default_ext_anchor_scales):
         super(vgg16_ssd, self).__init__(name='vgg16_ssd')
         self.vgg16_path = vgg16_path
         self.weight_decay = weight_decay
+        self.num_classes = num_classes
+        self.anchor_scales = anchor_scales
+        # self.num_anchors = len(anchor_scales)
+        self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
+        self.aspect_ratios = aspect_ratios
+        self.ext_anchors = ext_anchors
+        self.feature_map_size = []
 
     def set_pre_trained_weight_path(self, path):
         self.vgg16_path = path
@@ -49,15 +71,15 @@ class vgg16_ssd(net.Net):
             y = layers.conv2d(y, 128, [1, 1], 1, scope='conv11_1')
             y = layers.conv2d(y, 256, [3, 3], 1, padding='VALID',scope='conv11_2')
             feature_maps.append(y)
+            self.feature_map_size = [map.get_shape().as_list()[1:3] for map in feature_maps]
 
+            predictions = []
             for i, feature_map in enumerate(feature_maps):
-                pass
+                num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
+                prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i)
+                predictions.append(prediction)
 
-        return y
-
-
-
-
+        return predictions
 
 
     def get_update_ops(self):
@@ -118,12 +140,12 @@ net = vgg16_ssd()
 net.build(x)
 net.setup()
 
-init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
-
-
-with tf.Session() as sess:
-    writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
-    writer.flush()
-    writer.close()
+# init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
+print(net.feature_map_size)
+#
+# with tf.Session() as sess:
+#     writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
+#     writer.flush()
+#     writer.close()
 
 

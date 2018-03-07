@@ -1,5 +1,6 @@
 import tensorflow as tf
-
+import numpy as np
+np.set_printoptions(threshold=np.inf)
 
 def smooth_l1_loss(x):
     """
@@ -97,7 +98,125 @@ def pre_process(image, bboxes, size):
         image = resize(image, size)
     return image, bboxes
 
-MODE = 'data_augmentation'
+
+def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales, aspect_ratios, feature_map_size, threshold=0.5):
+    """
+
+    :param bboxes: [num_boxes, 4]
+    :param anchor_scales: [num_anchors]
+    :param ext_anchor_scales: [num_anchors]
+    :param aspect_ratios: [num_anchors, ?]
+    :param feature_map_size:
+    :return:
+    """
+    locations_all = []
+    labels_all = []
+    for i, size in enumerate(feature_map_size):
+        d_cy, d_cx = np.mgrid[0:size[0], 0:size[1]].astype(np.float32)
+        d_cx = (d_cx + 0.5) / size[1]
+        d_cy = (d_cy + 0.5) / size[0]
+        d_cx = np.expand_dims(d_cx, axis=-1)
+        d_cy = np.expand_dims(d_cy, axis=-1)
+
+        d_w = []
+        d_h = []
+
+        scale = anchor_scales[i]
+        # two aspect ratio 1 anchor scales
+        d_w.append(ext_anchor_scales[i])
+        d_w.append(scale)
+        d_h.append(ext_anchor_scales[i])
+        d_h.append(scale)
+        # other anchor scales
+        for ratio in aspect_ratios[i]:
+            d_w.append(scale * np.sqrt(ratio))
+            d_h.append(scale / np.sqrt(ratio))
+        d_w = np.array(d_w, dtype=np.float32)
+        d_h = np.array(d_h, dtype=np.float32)
+        d_ymin = d_cy - d_h/2
+        d_ymax = d_cy + d_h/2
+        d_xmin = d_cx - d_w/2
+        d_xmax = d_cx + d_w/2
+        # print(d_ymin[:,:,0])
+        vol_anchors = (d_xmax - d_xmin) * (d_ymax - d_ymin)
+        def calc_jaccard(bbox):
+            """
+            Calculate jaccard overlap with all feature_map_size[0]*feature_map_size[1]*num_anchors anchors
+            :param bbox: [d_ymin, d_xmin, d_ymax, d_xmax]
+            :return: jaccard overlap matrix with shape [feature_map_size[0], feature_map_size[1], num_anchors]
+            """
+            # int for intersection
+            int_ymin = tf.maximum(d_ymin, bbox[0])
+            int_xmin = tf.maximum(d_xmin, bbox[1])
+            int_ymax = tf.minimum(d_ymax, bbox[2])
+            int_xmax = tf.minimum(d_xmax, bbox[3])
+            h = tf.maximum(int_ymax - int_ymin, 0.)
+            w = tf.maximum(int_xmax - int_xmin, 0.)
+
+            # vol for volume.
+            vol_int = h * w
+            vol_union = vol_anchors - vol_int \
+                        + (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+            jaccard = tf.div(vol_int, vol_union)
+
+            return jaccard
+
+
+        shape = size + [len(d_w)]
+        final_labels = tf.zeros(shape, dtype=tf.int32)
+        # final_scores = tf.zeros(shape, dtype=tf.float32)
+        final_ymin = tf.zeros(shape, dtype=tf.float32)
+        final_xmin = tf.zeros(shape, dtype=tf.float32)
+        final_ymax = tf.zeros(shape, dtype=tf.float32)
+        final_xmax = tf.zeros(shape, dtype=tf.float32)
+        n_box = 0
+
+        def cond(n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax):
+            return n_box < bboxes.shape[0]
+
+        def body(n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax):
+            bbox = bboxes[n_box, :]
+            label = labels[n_box]
+
+            jaccard = calc_jaccard(bbox)
+
+            mask = tf.greater(jaccard, threshold)
+            int_mask = tf.cast(mask, tf.int32)
+            float_mask = tf.cast(mask, tf.float32)
+            final_labels = int_mask * label + (1 - int_mask) * final_labels
+            # final_scores = tf.where(mask, jaccard, final_scores)
+
+            final_ymin = float_mask * bbox[0] + (1 - float_mask) * final_ymin
+            final_xmin = float_mask * bbox[1] + (1 - float_mask) * final_xmin
+            final_ymax = float_mask * bbox[2] + (1 - float_mask) * final_ymax
+            final_xmax = float_mask * bbox[3] + (1 - float_mask) * final_xmax
+            n_box = n_box + 1
+            return n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax
+
+        n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax = \
+            tf.while_loop(cond, body,
+                          [n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax])
+
+        g_cx = (final_xmax + final_xmin) / 2
+        g_cy = (final_ymax + final_ymin) / 2
+        g_w = final_xmax - final_xmin
+        g_h = final_ymax - final_ymin
+
+        g_cx = (g_cx - d_cx) / d_w
+        g_cy = (g_cy - d_cy) / d_h
+        g_w = tf.log(g_w / d_w)
+        g_h = tf.log(g_h / d_h)
+
+        locations_all.append(tf.stack([g_cx, g_cy, g_w, g_h], -1))
+        labels_all.append(final_labels)
+        # ass = tf.assert_equal(tf.not_equal(final_labels, 0), tf.greater(final_scores, threshold))
+
+
+    return locations_all, labels_all
+
+
+
+MODE = 'bbx2gtth'
 
 
 def main():
@@ -120,6 +239,29 @@ def main():
                 k = cv2.waitKey(0)
                 if k == ord('q'):
                     break
+    elif MODE == 'bbx2gtth':
+        bbx = [[0, 0, 0.14, 0.14],
+               [0.562, 0.526, 0.904, 0.648],
+               [0.650, 0.01, 0.997, 0.134]]
+        labels = [3, 1, 2]
+        # s_k = s_min + (s_max - s_min)/(m - 1)(k - 1)
+        anchor_scales = [0.2, 0.34, 0.48, 0.62, 0.76, 0.9]  # of original image size
+        # s_k^{'} = sqrt(s_k*s_k+1)
+        ext_anchor_scales = [0.26, 0.28, 0.43, 0.60, 0.78, 0.98]  # of original image size
+        # omitted aspect ratio 1
+        aspect_ratios = [[1 / 2, 2],  # conv4_3
+                                 [1 / 3, 1 / 2, 2, 3],  # conv7
+                                 [1 / 3, 1 / 2, 2, 3],  # conv8_2
+                                 [1 / 3, 1 / 2, 2, 3],  # conv9_2
+                                 [1 / 2, 2],  # conv10_2
+                                 [1 / 2, 2]]  # conv11_2
+        feature_map_size = [[38, 38],
+                            [19, 19],
+                            [10, 10],
+                            [5, 5],
+                            [3, 3],
+                            [1, 1]]
+        bounding_boxes2ground_truth(tf.Variable(bbx, dtype=tf.float32), tf.Variable(labels, dtype=tf.int32), anchor_scales, ext_anchor_scales, aspect_ratios, feature_map_size)
 
 if __name__ == '__main__':
     main()
