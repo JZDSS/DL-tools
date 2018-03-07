@@ -97,23 +97,29 @@ def pre_process(image, bboxes, size):
         image = resize(image, size)
     return image, bboxes
 
+MODE = 'data_augmentation'
+
 
 def main():
-    import cv2
-    import numpy as np
-    img = cv2.imread('/home/yqi/Desktop/workspace/PycharmProjects/VOCdevkit/VOC2007/JPEGImages/000005.jpg')
-    bbx = [[0.562, 0.526, 0.904, 0.648],
-           [0.650, 0.01, 0.997, 0.134]]
-    x = tf.placeholder(tf.float32, shape=[None, None, 3])
-    b = tf.placeholder(tf.float32, shape=[2, 4])
-    processed_image, processed_bbox = pre_process(x, b, (300, 300))
-    drawed = tf.image.draw_bounding_boxes(tf.expand_dims(processed_image, 0), tf.expand_dims(processed_bbox, 0))
-    with tf.Session() as sess:
-        while True:
-            t, to_show = sess.run([processed_bbox, drawed], feed_dict={x: img, b: bbx})
-            print(t)
-            cv2.imshow("a", to_show.astype(np.uint8)[0])
-            cv2.waitKey(0)
+
+    if MODE == 'data_augmentation':
+        import cv2
+        import numpy as np
+        img = cv2.imread('/home/yqi/Desktop/workspace/PycharmProjects/VOCdevkit/VOC2007/JPEGImages/000005.jpg')
+        bbx = [[0.562, 0.526, 0.904, 0.648],
+               [0.650, 0.01, 0.997, 0.134]]
+        x = tf.placeholder(tf.float32, shape=[None, None, 3])
+        b = tf.placeholder(tf.float32, shape=[2, 4])
+        processed_image, processed_bbox = pre_process(x, b, (300, 300))
+        drawed = tf.image.draw_bounding_boxes(tf.expand_dims(processed_image, 0), tf.expand_dims(processed_bbox, 0))
+        with tf.Session() as sess:
+            while True:
+                t, to_show = sess.run([processed_bbox, drawed], feed_dict={x: img, b: bbx})
+                print(t)
+                cv2.imshow("a", to_show.astype(np.uint8)[0])
+                k = cv2.waitKey(0)
+                if k == ord('q'):
+                    break
 
 if __name__ == '__main__':
     main()

@@ -1,45 +1,58 @@
 import tensorflow as tf
 from tensorflow.contrib import layers
+from tensorflow.contrib.framework import arg_scope
 from nets import net, ssd
 import numpy as np
 
 class vgg16_ssd(net.Net):
 
-    def __init__(self, vgg16_path='../ssd/vgg16/vgg16.npy'):
+    def __init__(self, vgg16_path='../ssd/vgg16/vgg16.npy', weight_decay=0.0005):
         super(vgg16_ssd, self).__init__(name='vgg16_ssd')
         self.vgg16_path = vgg16_path
+        self.weight_decay = weight_decay
 
     def set_pre_trained_weight_path(self, path):
         self.vgg16_path = path
 
     def build(self, inputs):
-        # y = layers.conv2d(inputs, 64, [3, 3], 1, 'SAME', scope='conv1_1')
-        # y = layers.conv2d(y, 64, [3, 3], 1, 'SAME', scope='conv1_2')
-        y = inputs
-        y = layers.repeat(y, 2, layers.conv2d, 64, [3, 3], 1, 'SAME', scope='conv1')
-        y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool1')
-        y = layers.repeat(y, 2, layers.conv2d, 128, [3, 3], 1, 'SAME', scope='conv2')
-        y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool2')
-        y = layers.repeat(y, 3, layers.conv2d, 256, [3, 3], 1, 'SAME', scope='conv3')
-        y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
-        y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, 'SAME', scope='conv4')
-        y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
-        y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, 'SAME', scope='conv5')
-        # y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool5')
-        # change pool5 from 2 × 2 − s2 to 3 × 3 − s1
-        y = layers.max_pool2d(y, [3, 3], 1, 'SAME', scope='pool5')
-        # y = layers.fully_connected(layers.flatten(y), 4096, scope='fc6')
-        # y = layers.fully_connected(layers.flatten(y), 4096, scope='fc7')
-        # y = layers.conv2d(y, 4096, [7, 7], 1, 'VALID', scope='fc6')
-        # y = layers.conv2d(y, 4096, [1, 1], 1, 'VALID', scope='fc7')
-        with tf.variable_scope('fc6'):
-            w = tf.get_variable('weights', shape=[3, 3, 512, 1024], dtype=tf.float32)
-            b = tf.get_variable('biases', shape=[1024], dtype=tf.float32)
-            y = tf.nn.atrous_conv2d(y, w, 6, 'SAME')
-            y = tf.nn.bias_add(y, b)
-        y = layers.conv2d(y, 1024, [1, 1], 1, 'VALID', scope='fc7')
+        feature_maps = []
+        with arg_scope([layers.conv2d], weights_initializer=layers.xavier_initializer(),
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay), padding='SAME'):
+            y = inputs
+            y = layers.repeat(y, 2, layers.conv2d, 64, [3, 3], 1, scope='conv1')
+            y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool1')
+            y = layers.repeat(y, 2, layers.conv2d, 128, [3, 3], 1, scope='conv2')
+            y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool2')
+            y = layers.repeat(y, 3, layers.conv2d, 256, [3, 3], 1, scope='conv3')
+            y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
+            y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv4')
+            feature_maps.append(y)
+            y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
+            y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv5')
+            y = layers.max_pool2d(y, [3, 3], 1, 'SAME', scope='pool5')
+            with tf.variable_scope('fc6'):
+                w = tf.get_variable('weights', shape=[3, 3, 512, 1024], dtype=tf.float32)
+                b = tf.get_variable('biases', shape=[1024], dtype=tf.float32)
+                y = tf.nn.atrous_conv2d(y, w, 6, 'SAME')
+                y = tf.nn.bias_add(y, b)
+            y = layers.conv2d(y, 1024, [1, 1], 1, scope='fc7')
+            feature_maps.append(y)
+            y = layers.conv2d(y, 256, [1, 1], 1, scope='conv8_1')
+            y = layers.conv2d(y, 512, [3, 3], 2, scope='conv8_2')
+            feature_maps.append(y)
+            y = layers.conv2d(y, 128, [1, 1], 1, scope='conv9_1')
+            y = layers.conv2d(y, 256, [3, 3], 2, scope='conv9_2')
+            feature_maps.append(y)
+            y = layers.conv2d(y, 128, [1, 1], 1, scope='conv10_1')
+            y = layers.conv2d(y, 256, [3, 3], 1, padding='VALID', scope='conv10_2')
+            feature_maps.append(y)
+            y = layers.conv2d(y, 128, [1, 1], 1, scope='conv11_1')
+            y = layers.conv2d(y, 256, [3, 3], 1, padding='VALID',scope='conv11_2')
+            feature_maps.append(y)
 
-        # y = layers.fully_connected(layers.flatten(y), 1000, scope='fc8')
+            for i, feature_map in enumerate(feature_maps):
+                pass
+
         return y
 
 
@@ -109,7 +122,8 @@ init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
 
 
 with tf.Session() as sess:
-    tf.global_variables_initializer().run()
-    sess.run(init_ops)
+    writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
+    writer.flush()
+    writer.close()
 
 
