@@ -164,38 +164,41 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
 
         shape = size + [len(d_w)]
         final_labels = tf.zeros(shape, dtype=tf.int32)
-        # final_scores = tf.zeros(shape, dtype=tf.float32)
+        # final_bboxes = tf.zeros(size + [len(d_w), 4], dtype=tf.float32)
+        final_scores = tf.zeros(shape, dtype=tf.float32)
         final_ymin = tf.zeros(shape, dtype=tf.float32)
         final_xmin = tf.zeros(shape, dtype=tf.float32)
         final_ymax = tf.zeros(shape, dtype=tf.float32)
         final_xmax = tf.zeros(shape, dtype=tf.float32)
         n_box = 0
 
-        def cond(n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax):
+        def cond(n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax):
             return n_box < bboxes.shape[0]
 
-        def body(n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax):
+        def body(n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax):
             bbox = bboxes[n_box, :]
             label = labels[n_box]
 
             jaccard = calc_jaccard(bbox)
 
             mask = tf.greater(jaccard, threshold)
+            mask = tf.logical_and(mask, jaccard > final_scores)
             int_mask = tf.cast(mask, tf.int32)
             float_mask = tf.cast(mask, tf.float32)
             final_labels = int_mask * label + (1 - int_mask) * final_labels
-            # final_scores = tf.where(mask, jaccard, final_scores)
+            final_scores = tf.where(mask, jaccard, final_scores)
 
             final_ymin = float_mask * bbox[0] + (1 - float_mask) * final_ymin
             final_xmin = float_mask * bbox[1] + (1 - float_mask) * final_xmin
             final_ymax = float_mask * bbox[2] + (1 - float_mask) * final_ymax
             final_xmax = float_mask * bbox[3] + (1 - float_mask) * final_xmax
             n_box = n_box + 1
-            return n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax
+            return n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax
 
-        n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax = \
+        n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax = \
             tf.while_loop(cond, body,
-                          [n_box, final_labels, final_ymin, final_xmin, final_ymax, final_xmax])
+                          [n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax])
+
 
         g_cx = (final_xmax + final_xmin) / 2
         g_cy = (final_ymax + final_ymin) / 2
@@ -209,7 +212,11 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
 
         locations_all.append(tf.stack([g_cx, g_cy, g_w, g_h], -1))
         labels_all.append(final_labels)
-        # ass = tf.assert_equal(tf.not_equal(final_labels, 0), tf.greater(final_scores, threshold))
+        ass = tf.assert_equal(tf.not_equal(final_labels, 0), tf.greater(final_scores, threshold))
+
+        # with tf.Session() as sess:
+        #     tf.global_variables_initializer().run()
+        #     sess.run(ass)
 
 
     return locations_all, labels_all
