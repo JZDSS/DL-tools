@@ -2,6 +2,24 @@ import tensorflow as tf
 import numpy as np
 np.set_printoptions(threshold=np.inf)
 
+anchor_scales = [0.2, 0.34, 0.48, 0.62, 0.76, 0.9]  # of original image size
+# s_k^{'} = sqrt(s_k*s_k+1)
+ext_anchor_scales = [0.26, 0.28, 0.43, 0.60, 0.78, 0.98]  # of original image size
+# omitted aspect ratio 1
+aspect_ratios = [[1 / 2, 2],  # conv4_3
+                         [1 / 3, 1 / 2, 2, 3],  # conv7
+                         [1 / 3, 1 / 2, 2, 3],  # conv8_2
+                         [1 / 3, 1 / 2, 2, 3],  # conv9_2
+                         [1 / 2, 2],  # conv10_2
+                         [1 / 2, 2]]  # conv11_2
+feature_map_size = [[38, 38],
+                    [19, 19],
+                    [10, 10],
+                    [5, 5],
+                    [3, 3],
+                    [1, 1]]
+
+
 def smooth_l1_loss(x):
     """
     Computes smooth l1 loss: x^2 / 2 if abs(x) < 1, abs(x) - 0.5 otherwise and add to tf.GraphKeys.LOSSES collection.
@@ -81,16 +99,19 @@ def random_crop_with_bbox(img, bboxes, labels, minimum_jaccard_overlap=0.7,
                                     use_image_if_no_bounding_boxes=True,
                                     seed=seed, seed2=seed2)
         cropped_image = tf.slice(img, begin, size)
-        bboxes, labels = drop_small_bboxes(bboxes, bbox_for_slice, labels)
+        bboxes, labels, num_boxes = drop_small_bboxes(bboxes, bbox_for_slice, labels)
         transformed_bboxes = _transform_bboxes(bboxes, bbox_for_slice)
-    return cropped_image, transformed_bboxes, labels
+    return cropped_image, transformed_bboxes, labels, num_boxes
 
 
 
 def resize(image, size):
     with tf.name_scope('resize'):
         image = tf.image.resize_images(tf.expand_dims(image, 0), size)
-        image = tf.squeeze(image)
+        # image = tf.squeeze(image)
+
+        # image = tf.reshape(image, (300, 300, 3))
+        image = tf.reshape(image, tf.stack([size[0], size[1], 3]))
     return image
 
 
@@ -114,18 +135,19 @@ def drop_small_bboxes(bboxes, bbox_for_slice, labels):
     mask = scores > 0.5
     bboxes = tf.boolean_mask(bboxes, mask)
     labels = tf.boolean_mask(labels, mask)
-
-    return bboxes, labels
+    num_boxes = tf.reduce_sum(tf.cast(mask, tf.int32))
+    return bboxes, labels, num_boxes
 
 def pre_process(image, bboxes, size, labels):
     with tf.name_scope('pre_process'):
-        image, bboxes, labels = random_crop_with_bbox(image, bboxes, labels)
+        image, bboxes, labels, num_boxes = random_crop_with_bbox(image, bboxes, labels)
         image, bboxes = random_horizontally_flip_with_bbox(image, bboxes)
         image = resize(image, size)
-    return image, bboxes, labels
+    return image, bboxes, labels, num_boxes
 
 
-def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales, aspect_ratios, feature_map_size, threshold=0.5):
+def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales,
+                                aspect_ratios, feature_map_size, num_boxes, threshold=0.5):
     """
 
     :param bboxes: [num_boxes, 4]
@@ -193,7 +215,7 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
             return jaccard
 
         shape = size + [len(d_w)]
-        final_labels = tf.zeros(shape, dtype=tf.int32)
+        final_labels = tf.zeros(shape, dtype=tf.int64)
         final_scores = tf.zeros(shape, dtype=tf.float32)
         final_ymin = tf.zeros(shape, dtype=tf.float32)
         final_xmin = tf.zeros(shape, dtype=tf.float32)
@@ -202,7 +224,7 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
         n_box = 0
 
         def cond(n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax):
-            return n_box < bboxes.shape[0]
+            return n_box < num_boxes
 
         def body(n_box, final_labels, final_scores, final_ymin, final_xmin, final_ymax, final_xmax):
             bbox = bboxes[n_box, :]
@@ -212,7 +234,7 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
 
             mask = tf.greater(jaccard, threshold)
             mask = tf.logical_and(mask, jaccard > final_scores)
-            int_mask = tf.cast(mask, tf.int32)
+            int_mask = tf.cast(mask, tf.int64)
             float_mask = tf.cast(mask, tf.float32)
             final_labels = int_mask * label + (1 - int_mask) * final_labels
             final_scores = tf.where(mask, jaccard, final_scores)
@@ -250,8 +272,48 @@ def bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales
     return locations_all, labels_all
 
 
+def read_from_tfrecord(tfrecord_file_queue):
+    reader = tf.TFRecordReader()
+    _, tfrecord_serialized = reader.read(tfrecord_file_queue)
+    tfrecord_features = tf.parse_single_example(tfrecord_serialized,
+                                                features={
+                                                    'image_string': tf.FixedLenFeature([], dtype=tf.string),
+                                                    'labels': tf.VarLenFeature(dtype=tf.int64),
+                                                    'height': tf.FixedLenFeature([1], dtype=tf.int64),
+                                                    'width': tf.FixedLenFeature([1], dtype=tf.int64),
+                                                    'ymin': tf.VarLenFeature(dtype=tf.float32),
+                                                    'xmin': tf.VarLenFeature(dtype=tf.float32),
+                                                    'ymax': tf.VarLenFeature(dtype=tf.float32),
+                                                    'xmax': tf.VarLenFeature(dtype=tf.float32)
+                                                }, name='features')
+    # height = tfrecord_features['height']
+    # width = tfrecord_features['width']
+    image = tf.image.decode_jpeg(tfrecord_features['image_string'], 3)
+    # image.set_shape([height, width, 3])
+    labels = tf.sparse_tensor_to_dense(tfrecord_features['labels'])
+    ymin = tf.sparse_tensor_to_dense(tfrecord_features['ymin'])
+    xmin = tf.sparse_tensor_to_dense(tfrecord_features['xmin'])
+    ymax = tf.sparse_tensor_to_dense(tfrecord_features['ymax'])
+    xmax = tf.sparse_tensor_to_dense(tfrecord_features['xmax'])
+    bboxes = tf.stack([ymin, xmin, ymax, xmax], axis=-1)
+    image, bboxes, labels, num_boxes = pre_process(image, bboxes, (300, 300), labels)
+    #
+    locations, labels = bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales,
+                                aspect_ratios, feature_map_size, num_boxes,
+                                threshold=0.5)
+    #
 
-MODE = 'data_augmentation'
+
+    return [image] + locations + labels
+
+
+def input_pipeline(filenames, batch_size, read_threads=1, num_epochs=None):
+    filename_queue = tf.train.string_input_producer(
+        filenames, shuffle=True)
+    example = read_from_tfrecord(filename_queue)
+    e = tf.train.batch(example, batch_size, num_threads=4, capacity=32)
+    return e
+MODE = 'tfrecords'
 
 
 def main():
@@ -298,6 +360,50 @@ def main():
                             [3, 3],
                             [1, 1]]
         bounding_boxes2ground_truth(tf.Variable(bbx, dtype=tf.float32), tf.Variable(labels, dtype=tf.int32), anchor_scales, ext_anchor_scales, aspect_ratios, feature_map_size)
+    elif MODE == 'tfrecords':
+        import os
+        import cv2
+        import numpy as np
+        import matplotlib.pyplot as plt
+        i_and_l = input_pipeline(
+            ['./ssd/test.tfrecords'], 1)
+        images = i_and_l[0]
+        localizations = i_and_l[1:len(i_and_l)//2 + 1]
+        labels = i_and_l[len(i_and_l)//2 + 1:]
+        with tf.Session() as sess:
+            sess.run(tf.local_variables_initializer())
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(coord=coord)
+            while True:
+                im, locs, labs = sess.run([images, localizations, labels])
+                im = im[0, :, :, :].astype(np.uint8)
+                # plt.imshow(im)
+                # plt.show()
+                for n_map, lab in enumerate(labs):
+                    lab = lab[0, :, :, :]
+                    for c in range(lab.shape[-1]):
+                        labb = lab[:,:,c]
+                        for y in range(labb.shape[0]):
+                            for x in range(labb.shape[1]):
+                                if labb[y, x] != 0:
+                                    # cv2.circle(im, (int((x+0.5)/labb.shape[1]*300), int((y+0.5)/labb.shape[0]*300)), 20, 2)
+                                    bbox = locs[n_map][0, y, x, c,:]  #[cx, cy, w, h]
+                                    print(bbox)
+                                    minx = int((bbox[0] - bbox[2]/2)*300)
+                                    maxx = int((bbox[0] + bbox[2]/2)*300)
+                                    miny = int((bbox[1] - bbox[3]/2)*300)
+                                    maxy = int((bbox[1] + bbox[3]/2)*300)
+                                    cv2.rectangle(im, (minx, miny), (maxx, maxy), (0,0,255), 1)
+
+                plt.imshow(im)
+                plt.show()
+
+
+
+
+            coord.request_stop()
+            coord.join(threads)
+
 
 if __name__ == '__main__':
     main()
