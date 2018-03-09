@@ -161,7 +161,6 @@ class vgg16_ssd(net.Net):
         :return:
         """
         predictions = self.classification
-        indices_list = []
         pos_mask_list = []
         neg_mask_list = []
         for i in range(len(predictions)):
@@ -175,12 +174,13 @@ class vgg16_ssd(net.Net):
             scores = tf.nn.softmax(prediction)[:, :, :, :, 0]
             neg_scores = tf.cast(neg_mask, tf.float32) * scores
             flat_neg = tf.reshape(neg_scores, [-1])
-            _, indices = tf.nn.top_k(flat_neg, num_negtave)
-            indices_list.append(indices)
+            val, _ = tf.nn.top_k(flat_neg, num_negtave)
+            minval = val[-1]
+            neg_mask = tf.greater(flat_neg, minval)
             neg_mask_list.append(neg_mask)
             pos_mask_list.append(pos_mask)
 
-        return pos_mask_list, neg_mask_list, indices_list
+        return pos_mask_list, neg_mask_list
 
     def smooth_l1_loss(self, x):
         """
@@ -195,18 +195,18 @@ class vgg16_ssd(net.Net):
 
     def ssd_loss(self, gloc, gcls):
         with tf.name_scope('hard_negtave_mining'):
-            pos_mask_list, neg_mask_list, indices_list = self.hard_negtave_mining(gcls)
+            pos_mask_list, neg_mask_list = self.hard_negtave_mining(gcls)
 
         with tf.name_scope('cross_entropy'):
             xents = []
-            for i in range(len(indices_list)):
+            for i in range(len(neg_mask_list)):
                 xent = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.classification[i],
                                                                       labels=gcls[i])
                 xents.append(xent)
 
         with tf.name_scope('neg_cross_entropy'):
             loss_list = []
-            for i, indices in enumerate(indices_list):
+            for i, indices in enumerate(neg_mask_list):
                 loss = tf.cast(neg_mask_list[i], tf.float32) * xents[i]
                 loss = tf.reduce_mean(loss, axis=0)
                 loss = tf.reduce_sum(loss)
@@ -217,7 +217,7 @@ class vgg16_ssd(net.Net):
 
         with tf.name_scope('pos_cross_entropy'):
             loss_list = []
-            for i, indices in enumerate(indices_list):
+            for i, indices in enumerate(neg_mask_list):
                 loss = tf.cast(pos_mask_list[i], tf.float32) * xents[i]
                 loss = tf.reduce_mean(loss, axis=0)
                 loss = tf.reduce_sum(loss)
