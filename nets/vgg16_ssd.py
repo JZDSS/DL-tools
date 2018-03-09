@@ -28,8 +28,8 @@ class vgg16_ssd(net.Net):
         self.num_classes = num_classes
         self.anchor_scales = anchor_scales
         # self.num_anchors = len(anchor_scales)
-        self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
         self.aspect_ratios = aspect_ratios
+        self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
         self.ext_anchors = ext_anchors
         self.feature_map_size = []
 
@@ -73,14 +73,34 @@ class vgg16_ssd(net.Net):
             feature_maps.append(y)
             self.feature_map_size = [map.get_shape().as_list()[1:3] for map in feature_maps]
 
-            predictions = []
+            # predictions = []
+            self.location = []
+            self.classification = []
             for i, feature_map in enumerate(feature_maps):
                 num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
                 prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i)
-                predictions.append(prediction)
 
-        return predictions
-
+                locations, classifications = tf.split(prediction,
+                                                      [self.num_anchors[i] * 4,
+                                                       self.num_anchors[i] * (self.num_classes + 1)],
+                                                      -1)
+                shape = locations.get_shape()
+                locations = tf.reshape(locations, [-1,
+                                                   shape[1],
+                                                   shape[2],
+                                                   self.num_anchors[i],
+                                                   4])
+                shape = classifications.get_shape()
+                classifications = tf.reshape(classifications,
+                                             [-1,
+                                              shape[1],
+                                              shape[2],
+                                              self.num_anchors[i],
+                                              (self.num_classes + 1)])
+                self.location.append(locations)
+                self.classification.append(classifications)
+        self._setup()
+        # return predictions
 
     def get_update_ops(self):
         return tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -88,7 +108,7 @@ class vgg16_ssd(net.Net):
     def loss(self, logits, labels, *args, **kwargs):
         pass
 
-    def setup(self):
+    def _setup(self):
         """Define ops that load pre-trained vgg16 net's weights and biases and add them to tf.GraphKeys.INIT_OP
         collection.
         """
@@ -134,18 +154,99 @@ class vgg16_ssd(net.Net):
             tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
             tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
 
+    def hard_negtave_mining(self, labels):
+        """
+        :param predictions: List of predictions of all feature maps
+        :param labels: List of labels of all fearure maps
+        :return:
+        """
+        predictions = self.classification
+        indices_list = []
+        pos_mask_list = []
+        neg_mask_list = []
+        for i in range(len(predictions)):
+            # for every feature map
+            prediction = predictions[i]
+            label = labels[i]
+            pos_mask = tf.not_equal(label, 0)
+            neg_mask = tf.logical_not(pos_mask)
+            num_positive = tf.reduce_sum(tf.cast(pos_mask, tf.int32))
+            num_negtave = tf.minimum(num_positive * 3, tf.reduce_sum(tf.cast(neg_mask, tf.int32)))
+            scores = tf.nn.softmax(prediction)[:, :, :, :, 0]
+            neg_scores = tf.cast(neg_mask, tf.float32) * scores
+            flat_neg = tf.reshape(neg_scores, [-1])
+            _, indices = tf.nn.top_k(flat_neg, num_negtave)
+            indices_list.append(indices)
+            neg_mask_list.append(neg_mask)
+            pos_mask_list.append(pos_mask)
 
-x = tf.placeholder(shape=[None, 300, 300, 3], dtype=tf.float32)
-net = vgg16_ssd()
-net.build(x)
-net.setup()
+        return pos_mask_list, neg_mask_list, indices_list
 
-# init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
-print(net.feature_map_size)
-#
-# with tf.Session() as sess:
-#     writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
-#     writer.flush()
-#     writer.close()
+    def smooth_l1_loss(self, x):
+        """
+        Computes smooth l1 loss: x^2 / 2 if abs(x) < 1, abs(x) - 0.5 otherwise.
+        See [Fast R-CNN](https://arxiv.org/abs/1504.08083)
+        :param x: An input Tensor to calculate smooth L1 loss.
+        """
+        square_loss = 0.5 * x ** 2
+        absolute_loss = tf.abs(x)
+        loss = tf.where(tf.less(absolute_loss, 1.), square_loss, absolute_loss - 0.5)
+        return loss
+
+    def ssd_loss(self, gloc, gcls):
+        with tf.name_scope('hard_negtave_mining'):
+            pos_mask_list, neg_mask_list, indices_list = self.hard_negtave_mining(gcls)
+
+        with tf.name_scope('cross_entropy'):
+            xents = []
+            for i in range(len(indices_list)):
+                xent = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.classification[i],
+                                                                      labels=gcls[i])
+                xents.append(xent)
+
+        with tf.name_scope('neg_cross_entropy'):
+            loss_list = []
+            for i, indices in enumerate(indices_list):
+                loss = tf.cast(neg_mask_list[i], tf.float32) * xents[i]
+                loss = tf.reduce_mean(loss, axis=0)
+                loss = tf.reduce_sum(loss)
+                loss_list.append(loss)
+            loss = tf.add_n(loss_list)
+            tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+            tf.summary.scalar('neg_xent', loss)
+
+        with tf.name_scope('pos_cross_entropy'):
+            loss_list = []
+            for i, indices in enumerate(indices_list):
+                loss = tf.cast(pos_mask_list[i], tf.float32) * xents[i]
+                loss = tf.reduce_mean(loss, axis=0)
+                loss = tf.reduce_sum(loss)
+                loss_list.append(loss)
+            loss = tf.add_n(loss_list)
+            tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+            tf.summary.scalar('pos_xent', loss)
 
 
+        with tf.name_scope('location_loss'):
+            loc_loss = []
+            for i in range(len(self.location)):
+                loss = self.smooth_l1_loss(gloc[i] - self.location[i])
+                loss = pos_mask_list[i] * loss
+                loss = tf.reduce_mean(loss, axis=0)
+                loss = tf.reduce_sum(loss)
+                loc_loss.append(loss)
+            loss = tf.add_n(loc_loss)
+            tf.add_to_collection(tf.GraphKeys.INIT_OP, loss)
+            tf.summary.scalar('loc_loss', loss)
+
+
+def main():
+    x = tf.placeholder(shape=[None, 300, 300, 3], dtype=tf.float32)
+    net = vgg16_ssd()
+    net.build(x)
+
+
+
+
+if __name__ == '__main__':
+    main()
