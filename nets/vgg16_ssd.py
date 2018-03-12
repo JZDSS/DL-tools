@@ -177,6 +177,7 @@ class vgg16_ssd(net.Net):
             val, _ = tf.nn.top_k(flat_neg, num_negtave)
             minval = val[-1]
             neg_mask = tf.greater(flat_neg, minval)
+            neg_mask = tf.reshape(neg_mask, pos_mask.shape)
             neg_mask_list.append(neg_mask)
             pos_mask_list.append(pos_mask)
 
@@ -193,57 +194,67 @@ class vgg16_ssd(net.Net):
         loss = tf.where(tf.less(absolute_loss, 1.), square_loss, absolute_loss - 0.5)
         return loss
 
-    def ssd_loss(self, gloc, gcls):
+    def _ssd_loss(self, gloc, gcls):
         with tf.name_scope('hard_negtave_mining'):
             pos_mask_list, neg_mask_list = self.hard_negtave_mining(gcls)
+        with tf.name_scope('losses'):
+            with tf.name_scope('regularization'):
+                tf.summary.scalar('loc_loss', tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
-        with tf.name_scope('cross_entropy'):
-            xents = []
-            for i in range(len(neg_mask_list)):
-                xent = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.classification[i],
-                                                                      labels=gcls[i])
-                xents.append(xent)
+            with tf.name_scope('cross_entropy'):
+                xents = []
+                for i in range(len(neg_mask_list)):
+                    xent = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.classification[i],
+                                                                          labels=gcls[i])
+                    xents.append(xent)
 
-        with tf.name_scope('neg_cross_entropy'):
-            loss_list = []
-            for i, indices in enumerate(neg_mask_list):
-                loss = tf.cast(neg_mask_list[i], tf.float32) * xents[i]
-                loss = tf.reduce_mean(loss, axis=0)
-                loss = tf.reduce_sum(loss)
-                loss_list.append(loss)
-            loss = tf.add_n(loss_list)
-            tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
-            tf.summary.scalar('neg_xent', loss)
+            with tf.name_scope('neg_cross_entropy'):
+                loss_list = []
+                for i, indices in enumerate(neg_mask_list):
+                    loss = tf.cast(neg_mask_list[i], tf.float32) * xents[i]
+                    loss = tf.reduce_mean(loss, axis=0)
+                    loss = tf.reduce_sum(loss)
+                    loss_list.append(loss)
+                loss = tf.add_n(loss_list)
+                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.summary.scalar('neg_xent', loss)
 
-        with tf.name_scope('pos_cross_entropy'):
-            loss_list = []
-            for i, indices in enumerate(neg_mask_list):
-                loss = tf.cast(pos_mask_list[i], tf.float32) * xents[i]
-                loss = tf.reduce_mean(loss, axis=0)
-                loss = tf.reduce_sum(loss)
-                loss_list.append(loss)
-            loss = tf.add_n(loss_list)
-            tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
-            tf.summary.scalar('pos_xent', loss)
+            with tf.name_scope('pos_cross_entropy'):
+                loss_list = []
+                for i, indices in enumerate(neg_mask_list):
+                    loss = tf.cast(pos_mask_list[i], tf.float32) * xents[i]
+                    loss = tf.reduce_mean(loss, axis=0)
+                    loss = tf.reduce_sum(loss)
+                    loss_list.append(loss)
+                loss = tf.add_n(loss_list)
+                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.summary.scalar('pos_xent', loss)
 
 
-        with tf.name_scope('location_loss'):
-            loc_loss = []
-            for i in range(len(self.location)):
-                loss = self.smooth_l1_loss(gloc[i] - self.location[i])
-                loss = pos_mask_list[i] * loss
-                loss = tf.reduce_mean(loss, axis=0)
-                loss = tf.reduce_sum(loss)
-                loc_loss.append(loss)
-            loss = tf.add_n(loc_loss)
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, loss)
-            tf.summary.scalar('loc_loss', loss)
+            with tf.name_scope('location_loss'):
+                loc_loss = []
+                for i in range(len(self.location)):
+                    loss = self.smooth_l1_loss(gloc[i] - self.location[i])
+                    loss = tf.reduce_sum(loss, -1)
+                    loss = tf.cast(pos_mask_list[i], tf.float32) * loss
+                    loss = tf.reduce_mean(loss, axis=0)
+                    loss = tf.reduce_sum(loss)
+                    loc_loss.append(loss)
+                loss = tf.add_n(loc_loss)
+                tf.add_to_collection(tf.GraphKeys.INIT_OP, loss)
+                tf.summary.scalar('loc_loss', loss)
 
+    def get_loss(self, gloc, gcls):
+        self._ssd_loss(gloc, gcls)
+        loss = tf.get_collection(tf.GraphKeys.LOSSES) + tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        loss = tf.add_n(loss)
+        return loss
 
 def main():
     x = tf.placeholder(shape=[None, 300, 300, 3], dtype=tf.float32)
     net = vgg16_ssd()
     net.build(x)
+    net.get_loss()
 
 
 

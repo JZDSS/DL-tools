@@ -319,20 +319,34 @@ def input_pipeline(filenames, batch_size, read_threads, num_epochs=None):
 def main():
     import os
     from nets import vgg16_ssd
-    x = tf.placeholder(shape=[None, 300, 300, 3], dtype=tf.float32)
-    net = vgg16_ssd.vgg16_ssd()
-    net.build(x)
-    locations_pred = net.location
-    classicication_pred = net.classification
+
     i_and_l = input_pipeline(
     tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')), 32, read_threads=1)
     images = i_and_l[0]
     locations = i_and_l[1:len(i_and_l)//2 + 1]
     labels = i_and_l[len(i_and_l)//2 + 1:]
 
-    net.ssd_loss(locations, labels)
+    net = vgg16_ssd.vgg16_ssd()
+    net.build(images)
+    loss = net.get_loss(locations, labels)
 
-    # # localization decoding codes
+    with tf.Session() as sess:
+        sess.run(tf.local_variables_initializer())
+        sess.run(tf.global_variables_initializer())
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+        print(sess.run(loss))
+
+        coord.request_stop()
+        coord.join(threads)
+
+
+
+
+
+
+
+# # localization decoding codes
     # import os
     # import cv2
     # import numpy as np
