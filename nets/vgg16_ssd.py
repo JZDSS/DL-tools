@@ -32,9 +32,16 @@ class vgg16_ssd(net.Net):
         self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
         self.ext_anchors = ext_anchors
         self.feature_map_size = []
+        self.feature_maps = None
 
     def set_pre_trained_weight_path(self, path):
         self.vgg16_path = path
+
+    def l2_norm(self, x):
+        x = tf.nn.l2_normalize(x, [0, 1, 2, 3])
+        gamma = tf.get_variable('gamma', shape=[1, 1, 512], initializer=tf.constant_initializer(20, tf.float32))
+        x = x * gamma
+        return x
 
     def build(self, inputs):
         feature_maps = []
@@ -48,6 +55,7 @@ class vgg16_ssd(net.Net):
             y = layers.repeat(y, 3, layers.conv2d, 256, [3, 3], 1, scope='conv3')
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv4')
+            y = self.l2_norm(y)
             feature_maps.append(y)
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv5')
@@ -100,6 +108,7 @@ class vgg16_ssd(net.Net):
                 self.location.append(locations)
                 self.classification.append(classifications)
         self._setup()
+        self.feature_maps = feature_maps
         # return predictions
 
     def get_update_ops(self):
@@ -153,6 +162,10 @@ class vgg16_ssd(net.Net):
             b_init_op = biases.assign(b)
             tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
             tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
+
+    def add_summary(self):
+        for i, feature_map in enumerate(self.feature_maps):
+            tf.summary.histogram('feature_map_%d' % i,  feature_map)
 
     def hard_negtave_mining(self, labels):
         """
