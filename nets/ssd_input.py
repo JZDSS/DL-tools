@@ -91,7 +91,6 @@ def random_crop_with_bbox(img, bboxes, labels, minimum_jaccard_overlap=0.7,
     return cropped_image, transformed_bboxes, labels, num_boxes
 
 
-
 def resize(image, size):
     with tf.name_scope('resize'):
         image = tf.image.resize_images(tf.expand_dims(image, 0), size)
@@ -124,6 +123,7 @@ def drop_small_bboxes(bboxes, bbox_for_slice, labels):
     labels = tf.boolean_mask(labels, mask)
     num_boxes = tf.reduce_sum(tf.cast(mask, tf.int32))
     return bboxes, labels, num_boxes
+
 
 def pre_process(image, bboxes, size, labels):
     with tf.name_scope('pre_process'):
@@ -277,6 +277,7 @@ def read_from_tfrecord(tfrecord_file_queue):
     # height = tfrecord_features['height']
     # width = tfrecord_features['width']
     image = tf.image.decode_jpeg(tfrecord_features['image_string'], 3)
+
     # image.set_shape([height, width, 3])
     labels = tf.sparse_tensor_to_dense(tfrecord_features['labels'])
     ymin = tf.sparse_tensor_to_dense(tfrecord_features['ymin'])
@@ -289,7 +290,10 @@ def read_from_tfrecord(tfrecord_file_queue):
     locations, labels = bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales,
                                 aspect_ratios, feature_map_size, num_boxes,
                                 threshold=0.5)
-    #
+    mean = tf.constant([123, 117, 104], dtype=image.dtype)
+    mean = tf.reshape(mean, [1, 1, 3])
+    image = image - mean
+
 
 
     return [image] + locations + labels
@@ -321,24 +325,34 @@ def main():
     from nets import vgg16_ssd
 
     i_and_l = input_pipeline(
-    tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')), 32, read_threads=1)
+        tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')), 2, read_threads=1)
     images = i_and_l[0]
     locations = i_and_l[1:len(i_and_l)//2 + 1]
     labels = i_and_l[len(i_and_l)//2 + 1:]
 
     net = vgg16_ssd.vgg16_ssd()
     net.build(images)
-    loss = net.get_loss(locations, labels)
+    # loss = net.get_loss(locations, labels)
+    net.add_summary()
+    summ = tf.summary.merge_all()
+
 
     with tf.Session() as sess:
+        train_writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
+        train_writer.flush()
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
+        sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
-        print(sess.run(loss))
+        a = sess.run(images)
+        for i in range(100):
+            s = sess.run(summ)
+            train_writer.add_summary(s, i)
 
         coord.request_stop()
         coord.join(threads)
+        train_writer.close()
 
 
 
