@@ -1,8 +1,7 @@
 import os
 import tensorflow as tf
-from cfg import FLAGS as FLAGS
+from ssd_cfg import FLAGS as FLAGS
 from nets import vgg16_ssd, ssd_input
-import numpy as np
 
 
 def average_gradients(tower_grads):
@@ -32,12 +31,7 @@ def main(_):
     if not tf.gfile.Exists(FLAGS.data_dir):
         raise RuntimeError('data direction is not exist!')
 
-    # if tf.gfile.Exists(FLAGS.log_dir):
-    #     tf.gfile.DeleteRecursively(FLAGS.log_dir)
     tf.gfile.MakeDirs(FLAGS.log_dir)
-
-    # if not tf.gfile.Exists(FLAGS.ckpt_dir):
-    tf.gfile.MakeDirs(os.path.join(FLAGS.ckpt_dir, 'best'))
 
     f = open(FLAGS.out_file + '.txt', 'a' if FLAGS.start_step is not 0 else 'w')
     if not f:
@@ -47,9 +41,9 @@ def main(_):
     with tf.device('/cpu:0'):
         num_gpus = len(FLAGS.gpu.split(','))
         global_step = tf.Variable(FLAGS.start_step, name='global_step', trainable=False)
-        
-        # learning_rate = tf.train.piecewise_constant(global_step, 
-        #                                             [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000], 
+
+        # learning_rate = tf.train.piecewise_constant(global_step,
+        #                                             [500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000],
         #                                             [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0])
         # step_size = 10000
         # learning_rate = tf.train.exponential_decay(1.0, global_step, 2*step_size, 0.5, staircase=True)
@@ -57,7 +51,7 @@ def main(_):
         # xx = tf.abs(tf.cast(global_step, tf.float32)/step_size - 2. * tf.cast(cycle, tf.float32) + 1.)
         # learning_rate = 1e-4 + (1e-1 - 1e-4) * tf.maximum(0., (1-xx))*learning_rate
         # learning_rate = tf.train.piecewise_constant(global_step, [10000, 70000, 120000, 170000, 220000],
-        #                                                         [0.01, 0.1, 0.001, 0.0001, 0.00001, 0.000001])        
+        #                                                         [0.01, 0.1, 0.001, 0.0001, 0.00001, 0.000001])
         # learning_rate = tf.constant(0.001)
         learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)
         print('learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)', file=f)
@@ -73,7 +67,6 @@ def main(_):
         tf.summary.scalar('learing rate', learning_rate)
         tower_grads = []
         tower_loss = []
-        tower_acc = []
 
         i_and_l = ssd_input.input_pipeline(
             tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')),
@@ -87,19 +80,19 @@ def main(_):
         image_batch = tf.split(images, num_gpus, 0)
         location_batch = tf.split(locations, num_gpus, 0)
         label_batch = tf.split(labels, num_gpus, 0)
-        with tf.device('/CPU:0'):
-            with tf.name_scope('CPU'):
-                net.build(tf.placeholder(dtype=tf.float32, shape=[None, None, None, None]))
 
-        for i in range(num_gpus):
-            with tf.device('/gpu:%d' % i):
-                with tf.name_scope('tower_%d' % i):
-                    with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-                        net.build(image_batch[i])
-                        loss = net.get_loss(location_batch[i], label_batch[i])
-                        grads = opt.compute_gradients(loss)
-                        tower_grads.append(grads)
-                        tower_loss.append(loss)
+        with tf.name_scope('CPU'):
+            net.build(tf.placeholder(dtype=tf.float32, shape=[None, None, None, None]))
+
+    for i in range(num_gpus):
+        with tf.device('/gpu:%d' % i):
+            with tf.name_scope('tower_%d' % i):
+                with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+                    net.build(image_batch[i])
+                    loss = net.get_loss(location_batch[i], label_batch[i])
+                    grads = opt.compute_gradients(loss)
+                    tower_grads.append(grads)
+                    tower_loss.append(loss)
 
 
         with tf.name_scope('scores'):
@@ -131,9 +124,11 @@ def main(_):
             threads = tf.train.start_queue_runners(coord=coord)
 
             if tf.gfile.Exists(os.path.join(FLAGS.ckpt_dir, 'checkpoint')):
-                saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
-            else:
-                sess.run(tf.global_variables_initializer())
+                try:
+                    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
+                except:
+                    sess.run(tf.global_variables_initializer())
+                    sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
             if FLAGS.start_step != 0:
                 sess.run(tf.assign(global_step, FLAGS.start_step))
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
@@ -152,7 +147,6 @@ def main(_):
             coord.join(threads)
 
     train_writer.close()
-    # test_writer.close()
     f.close()
 
 
