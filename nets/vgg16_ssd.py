@@ -254,7 +254,7 @@ class vgg16_ssd(net.Net):
                     loss = tf.reduce_sum(loss)
                     loc_loss.append(loss)
                 loss = tf.add_n(loc_loss)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, loss)
+                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
                 tf.summary.scalar('loc_loss', loss)
 
     def get_loss(self, gloc, gcls):
