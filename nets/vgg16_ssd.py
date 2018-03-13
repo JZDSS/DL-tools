@@ -39,7 +39,7 @@ class vgg16_ssd(net.Net):
 
     def l2_norm(self, x):
         x = tf.nn.l2_normalize(x, [0, 1, 2, 3])
-        gamma = tf.get_variable('gamma', shape=[1, 1, 512], initializer=tf.constant_initializer(20, tf.float32))
+        gamma = 20 * tf.get_variable('gamma', shape=[1], initializer=tf.ones_initializer(tf.float32), trainable=True)
         x = x * gamma
         return x
 
@@ -55,7 +55,8 @@ class vgg16_ssd(net.Net):
             y = layers.repeat(y, 3, layers.conv2d, 256, [3, 3], 1, scope='conv3')
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv4')
-            y = self.l2_norm(y)
+            with tf.variable_scope('l2_norm'):
+                y = self.l2_norm(y)
             feature_maps.append(y)
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv5')
@@ -166,6 +167,9 @@ class vgg16_ssd(net.Net):
     def add_summary(self):
         for i, feature_map in enumerate(self.feature_maps):
             tf.summary.histogram('feature_map_%d' % i,  feature_map)
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            v = tf.get_variable('l2_norm/gamma')
+            tf.summary.scalar('scalar', tf.reduce_mean(v))
 
     def hard_negtave_mining(self, labels):
         """

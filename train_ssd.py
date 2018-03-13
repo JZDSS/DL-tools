@@ -53,7 +53,7 @@ def main(_):
         # learning_rate = tf.train.piecewise_constant(global_step, [10000, 70000, 120000, 170000, 220000],
         #                                                         [0.01, 0.1, 0.001, 0.0001, 0.00001, 0.000001])
         # learning_rate = tf.constant(0.001)
-        learning_rate = tf.train.exponential_decay(0.001, global_step, 30000, 0.1, staircase=True)
+        learning_rate = tf.train.exponential_decay(0.001, global_step, 800, 0.98, staircase=True)
         print('learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)', file=f)
 
         # opt = tf.train.AdamOptimizer(learning_rate)
@@ -94,74 +94,79 @@ def main(_):
 
         with tf.name_scope('CPU'):
             net.build(tf.placeholder(dtype=tf.float32, shape=[None, 300, 300, 3]))
-
+    var_list = []
+    for scope in ['l2_norm', 'conv8', 'conv9', 'conv10', 'conv11']:
+        var_list += tf.trainable_variables(scope=scope)
     for i in range(num_gpus):
         with tf.device('/gpu:%d' % i):
             with tf.name_scope('tower_%d' % i):
                 with tf.variable_scope(tf.get_variable_scope(), reuse=True):
                     net.build(image_batch[i])
                     loss = net.get_loss(location_batch[i], label_batch[i])
-                    grads = opt.compute_gradients(loss)
+                    grads = opt.compute_gradients(loss, var_list=var_list)
                     tower_grads.append(grads)
                     tower_loss.append(loss)
 
 
-        with tf.name_scope('scores'):
-            with tf.name_scope('batch_loss'):
-                batch_loss = tf.add_n(tower_loss)/num_gpus
 
-            tf.summary.scalar('loss', batch_loss)
+    with tf.name_scope('scores'):
+        with tf.name_scope('batch_loss'):
+            batch_loss = tf.add_n(tower_loss)/num_gpus
+            net.add_summary()
 
-        grads = average_gradients(tower_grads)
+        tf.summary.scalar('loss', batch_loss)
 
-        with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
-            variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
-            variables_averages_op = variable_averages.apply(tf.trainable_variables())
-            update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-            with tf.control_dependencies(update_ops):
-                apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
-            train_op = tf.group(apply_gradient_op, variables_averages_op)
-            # train_op = apply_gradient_op
+    grads = average_gradients(tower_grads)
+
+    with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+        variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
+        variables_averages_op = variable_averages.apply(tf.trainable_variables())
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+        train_op = tf.group(apply_gradient_op, variables_averages_op)
+        # train_op = apply_gradient_op
 
 
-        # summary_op = tf.summary.merge_all()
-        # init = tf.global_variables_initializer()
-        summary_op = tf.summary.merge_all()
+    # summary_op = tf.summary.merge_all()
+    # init = tf.global_variables_initializer()
+    summary_op = tf.summary.merge_all()
 
-        saver = tf.train.Saver(name="saver", max_to_keep=10)
-        with tf.Session(config=config) as sess:
-            sess.run(tf.local_variables_initializer())
-            coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coord)
+    saver = tf.train.Saver(name="saver", max_to_keep=10)
+    with tf.Session(config=config) as sess:
+        sess.run(tf.local_variables_initializer())
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
 
-            if tf.gfile.Exists(os.path.join(FLAGS.ckpt_dir, 'checkpoint')):
-                try:
-                    print('restore from ckpt')
-                    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
-                except:
-                    print('restore failed, load weights from vgg16')
-                    sess.run(tf.global_variables_initializer())
-                    sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
-            else:
-                print('train from vgg16')
+        if tf.gfile.Exists(os.path.join(FLAGS.ckpt_dir, 'checkpoint')):
+            try:
+                print('restore from ckpt')
+                saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
+            except:
+                print('restore failed, load weights from vgg16')
                 sess.run(tf.global_variables_initializer())
                 sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
-            if FLAGS.start_step != 0:
-                sess.run(tf.assign(global_step, FLAGS.start_step))
-            train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
-            train_writer.flush()
-            d = 1000
-            for i in range(FLAGS.start_step, FLAGS.max_steps + 1):
-                # feed = feed_dict(True, True)
-                if i % d == 0:  # Record summaries and test-set accuracy
-                    loss, summ, lr = sess.run([batch_loss, summary_op, learning_rate])
-                    train_writer.add_summary(summ, i)
-                    saver.save(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name), global_step=i)
-                    f.flush()
-                sess.run(train_op)
+        else:
+            print('train from vgg16')
+            sess.run(tf.global_variables_initializer())
+            sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+        if FLAGS.start_step != 0:
+            sess.run(tf.assign(global_step, FLAGS.start_step))
+        train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
+        train_writer.flush()
+        d = 1000
+        for i in range(FLAGS.start_step, FLAGS.max_steps + 1):
+            # feed = feed_dict(True, True)
+            if i % d == 0:  # Record summaries and test-set accuracy
+                loss, summ, lr = sess.run([batch_loss, summary_op, learning_rate])
+                train_writer.add_summary(summ, i)
+                saver.save(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name), global_step=i)
+                print('loss=%f'%loss)
+                train_writer.flush()
+            sess.run(train_op)
 
-            coord.request_stop()
-            coord.join(threads)
+        coord.request_stop()
+        coord.join(threads)
 
     train_writer.close()
     f.close()
