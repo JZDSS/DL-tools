@@ -53,7 +53,7 @@ def main(_):
         # learning_rate = tf.train.piecewise_constant(global_step, [10000, 70000, 120000, 170000, 220000],
         #                                                         [0.01, 0.1, 0.001, 0.0001, 0.00001, 0.000001])
         # learning_rate = tf.constant(0.001)
-        learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)
+        learning_rate = tf.train.exponential_decay(0.001, global_step, 30000, 0.1, staircase=True)
         print('learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)', file=f)
 
         # opt = tf.train.AdamOptimizer(learning_rate)
@@ -69,7 +69,7 @@ def main(_):
         tower_loss = []
 
         i_and_l = ssd_input.input_pipeline(
-            tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')),
+            tf.train.match_filenames_once(os.path.join('nets/ssd', '*.tfrecords')),
             FLAGS.batch_size * num_gpus, read_threads=1)
         images = i_and_l[0]
         locations = i_and_l[1:len(i_and_l) // 2 + 1]
@@ -78,11 +78,22 @@ def main(_):
         net = vgg16_ssd.vgg16_ssd()
 
         image_batch = tf.split(images, num_gpus, 0)
-        location_batch = tf.split(locations, num_gpus, 0)
-        label_batch = tf.split(labels, num_gpus, 0)
+        tmp = []
+        for loc in locations:
+            tmp.append(tf.split(loc, num_gpus, 0))
+        location_batch = []
+        for i in range(num_gpus):
+            location_batch.append(list(m[i] for m in tmp))
+
+        tmp = []
+        for lab in labels:
+           tmp.append(tf.split(lab, num_gpus, 0))
+        label_batch = []
+        for i in range(num_gpus):
+            label_batch.append(list(m[i] for m in tmp))
 
         with tf.name_scope('CPU'):
-            net.build(tf.placeholder(dtype=tf.float32, shape=[None, None, None, None]))
+            net.build(tf.placeholder(dtype=tf.float32, shape=[None, 300, 300, 3]))
 
     for i in range(num_gpus):
         with tf.device('/gpu:%d' % i):
@@ -97,7 +108,7 @@ def main(_):
 
         with tf.name_scope('scores'):
             with tf.name_scope('batch_loss'):
-                batch_loss = tf.add_n(tower_loss)[0]/num_gpus
+                batch_loss = tf.add_n(tower_loss)/num_gpus
 
             tf.summary.scalar('loss', batch_loss)
 
@@ -125,10 +136,16 @@ def main(_):
 
             if tf.gfile.Exists(os.path.join(FLAGS.ckpt_dir, 'checkpoint')):
                 try:
+                    print('restore from ckpt')
                     saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
                 except:
+                    print('restore failed, load weights from vgg16')
                     sess.run(tf.global_variables_initializer())
                     sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+            else:
+                print('train from vgg16')
+                sess.run(tf.global_variables_initializer())
+                sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
             if FLAGS.start_step != 0:
                 sess.run(tf.assign(global_step, FLAGS.start_step))
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
@@ -137,7 +154,7 @@ def main(_):
             for i in range(FLAGS.start_step, FLAGS.max_steps + 1):
                 # feed = feed_dict(True, True)
                 if i % d == 0:  # Record summaries and test-set accuracy
-                    acc, loss, summ, lr = sess.run([batch_loss, summary_op, learning_rate])
+                    loss, summ, lr = sess.run([batch_loss, summary_op, learning_rate])
                     train_writer.add_summary(summ, i)
                     saver.save(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name), global_step=i)
                     f.flush()

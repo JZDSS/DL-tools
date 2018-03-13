@@ -10,3 +10,6 @@ ignore/
 *.caffemodel
 *.npy
 *.tfrecords
+*log
+ckpt/
+

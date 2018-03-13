@@ -17,12 +17,12 @@ default_aspect_ratios = [[1/2, 2],                          # conv4_3
                          [1 / 2, 2],                        # conv10_2
                          [1 / 2, 2]]                        # conv11_2
 
-class vgg16_ssd(net.Net):
+class alex_ssd(net.Net):
 
-    def __init__(self, vgg16_path='ssd/vgg16/vgg16.npy', weight_decay=0.0005,
+    def __init__(self, vgg16_path='../ssd/vgg16/vgg16.npy', weight_decay=0.0005,
                  num_classes=20, anchor_scales=default_anchor_scales, aspect_ratios=default_aspect_ratios,
                  ext_anchors=default_ext_anchor_scales):
-        super(vgg16_ssd, self).__init__(name='vgg16_ssd')
+        super(alex_ssd, self).__init__(name='alex_ssd')
         self.vgg16_path = vgg16_path
         self.weight_decay = weight_decay
         self.num_classes = num_classes
@@ -46,11 +46,11 @@ class vgg16_ssd(net.Net):
     def build(self, inputs):
         feature_maps = []
         with arg_scope([layers.conv2d], weights_initializer=layers.xavier_initializer(),
-                       weights_regularizer=layers.l2_regularizer(self.weight_decay), padding='SAME'):
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay), padding='VALID'):
             y = inputs
-            y = layers.repeat(y, 2, layers.conv2d, 64, [3, 3], 1, scope='conv1')
-            y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool1')
-            y = layers.repeat(y, 2, layers.conv2d, 128, [3, 3], 1, scope='conv2')
+            y = layers.conv2d(y, 96, [11, 11], 4, scope='conv1')
+            y = layers.max_pool2d(y, [3, 3], 2, 'SAME', scope='pool1')
+            y = layers.conv2d(y, 256, [5, 5], 2, scope='conv2')
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool2')
             y = layers.repeat(y, 3, layers.conv2d, 256, [3, 3], 1, scope='conv3')
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
@@ -212,7 +212,7 @@ class vgg16_ssd(net.Net):
             pos_mask_list, neg_mask_list = self.hard_negtave_mining(gcls)
         with tf.name_scope('losses'):
             with tf.name_scope('regularization'):
-                tf.summary.scalar('regular', tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
+                tf.summary.scalar('loc_loss', tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
             with tf.name_scope('cross_entropy'):
                 xents = []

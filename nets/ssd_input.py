@@ -323,18 +323,19 @@ def input_pipeline(filenames, batch_size, read_threads, num_epochs=None):
 def main():
     import os
     from nets import vgg16_ssd
+    with tf.device('/cpu:0'):
+        i_and_l = input_pipeline(
+            tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')), 2, read_threads=1)
+        images = i_and_l[0]
+        locations = i_and_l[1:len(i_and_l)//2 + 1]
+        labels = i_and_l[len(i_and_l)//2 + 1:]
 
-    i_and_l = input_pipeline(
-        tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')), 2, read_threads=1)
-    images = i_and_l[0]
-    locations = i_and_l[1:len(i_and_l)//2 + 1]
-    labels = i_and_l[len(i_and_l)//2 + 1:]
-
-    net = vgg16_ssd.vgg16_ssd()
-    net.build(images)
-    # loss = net.get_loss(locations, labels)
-    net.add_summary()
-    summ = tf.summary.merge_all()
+        net = vgg16_ssd.vgg16_ssd()
+        net.set_pre_trained_weight_path('../ssd/vgg16/vgg16.npy')
+        net.build(images)
+        loss = net.get_loss(locations, labels)
+        net.add_summary()
+        summ = tf.summary.merge_all()
 
 
     with tf.Session() as sess:
@@ -342,13 +343,14 @@ def main():
         train_writer.flush()
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
-        sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+        # sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
         a = sess.run(images)
         for i in range(100):
-            s = sess.run(summ)
-            train_writer.add_summary(s, i)
+            s = sess.run(loss)
+            print(s)
+            # train_writer.add_summary(s, i)
 
         coord.request_stop()
         coord.join(threads)
