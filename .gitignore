@@ -7,3 +7,9 @@ out/
 stand_alone/
 logs/
 ignore/
+*.caffemodel
+*.npy
+*.tfrecords
+*log
+ckpt/
+
