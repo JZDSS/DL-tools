@@ -170,7 +170,7 @@ class vgg16_ssd(net.Net):
             pos_mask = tf.not_equal(label, 0)
             neg_mask = tf.logical_not(pos_mask)
             num_positive = tf.reduce_sum(tf.cast(pos_mask, tf.int32))
-            num_negtave = tf.minimum(num_positive * 3, tf.reduce_sum(tf.cast(neg_mask, tf.int32)))
+            num_negtave = tf.minimum(num_positive * 3 + 1, tf.reduce_sum(tf.cast(neg_mask, tf.int32)))
             scores = tf.nn.softmax(prediction)[:, :, :, :, 0]
             neg_scores = tf.cast(neg_mask, tf.float32) * scores
             flat_neg = tf.reshape(neg_scores, [-1])
