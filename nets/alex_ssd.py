@@ -19,7 +19,7 @@ default_aspect_ratios = [[1/2, 2],                          # conv4_3
 
 class alex_ssd(net.Net):
 
-    def __init__(self, vgg16_path='../ssd/vgg16/vgg16.npy', weight_decay=0.0005,
+    def __init__(self, vgg16_path='ssd/alex/alex.npy', weight_decay=0.0005,
                  num_classes=20, anchor_scales=default_anchor_scales, aspect_ratios=default_aspect_ratios,
                  ext_anchors=default_ext_anchor_scales):
         super(alex_ssd, self).__init__(name='alex_ssd')
@@ -39,23 +39,24 @@ class alex_ssd(net.Net):
 
     def l2_norm(self, x):
         x = tf.nn.l2_normalize(x, [0, 1, 2, 3])
-        gamma = tf.get_variable('gamma', shape=[1, 1, 512], initializer=tf.constant_initializer(20, tf.float32))
+        gamma = 20 * tf.get_variable('gamma', shape=[1], initializer=tf.ones_initializer(tf.float32), trainable=True)
         x = x * gamma
         return x
 
     def build(self, inputs):
         feature_maps = []
         with arg_scope([layers.conv2d], weights_initializer=layers.xavier_initializer(),
-                       weights_regularizer=layers.l2_regularizer(self.weight_decay), padding='VALID'):
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay), padding='SAME'):
             y = inputs
-            y = layers.conv2d(y, 96, [11, 11], 4, scope='conv1')
-            y = layers.max_pool2d(y, [3, 3], 2, 'SAME', scope='pool1')
-            y = layers.conv2d(y, 256, [5, 5], 2, scope='conv2')
+            y = layers.repeat(y, 2, layers.conv2d, 64, [3, 3], 1, scope='conv1')
+            y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool1')
+            y = layers.repeat(y, 2, layers.conv2d, 128, [3, 3], 1, scope='conv2')
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool2')
             y = layers.repeat(y, 3, layers.conv2d, 256, [3, 3], 1, scope='conv3')
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv4')
-            y = self.l2_norm(y)
+            with tf.variable_scope('l2_norm'):
+                y = self.l2_norm(y)
             feature_maps.append(y)
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv5')
@@ -166,6 +167,9 @@ class alex_ssd(net.Net):
     def add_summary(self):
         for i, feature_map in enumerate(self.feature_maps):
             tf.summary.histogram('feature_map_%d' % i,  feature_map)
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            v = tf.get_variable('l2_norm/gamma')
+            tf.summary.scalar('scalar', tf.reduce_mean(v))
 
     def hard_negtave_mining(self, labels):
         """
@@ -183,13 +187,13 @@ class alex_ssd(net.Net):
             pos_mask = tf.not_equal(label, 0)
             neg_mask = tf.logical_not(pos_mask)
             num_positive = tf.reduce_sum(tf.cast(pos_mask, tf.int32))
-            num_negtave = tf.minimum(num_positive * 3, tf.reduce_sum(tf.cast(neg_mask, tf.int32)))
+            num_negtave = tf.minimum(num_positive * 3 + 1, tf.reduce_sum(tf.cast(neg_mask, tf.int32)))
             scores = tf.nn.softmax(prediction)[:, :, :, :, 0]
             neg_scores = tf.cast(neg_mask, tf.float32) * scores
             flat_neg = tf.reshape(neg_scores, [-1])
-            val, _ = tf.nn.top_k(flat_neg, num_negtave)
-            minval = val[-1]
-            neg_mask = tf.greater(flat_neg, minval)
+            val, _ = tf.nn.top_k(-flat_neg, num_negtave)
+            maxval = -val[-1]
+            neg_mask = tf.less(flat_neg, maxval)
             neg_mask = tf.reshape(neg_mask, pos_mask.shape)
             neg_mask_list.append(neg_mask)
             pos_mask_list.append(pos_mask)
@@ -211,8 +215,6 @@ class alex_ssd(net.Net):
         with tf.name_scope('hard_negtave_mining'):
             pos_mask_list, neg_mask_list = self.hard_negtave_mining(gcls)
         with tf.name_scope('losses'):
-            with tf.name_scope('regularization'):
-                tf.summary.scalar('loc_loss', tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES))
 
             with tf.name_scope('cross_entropy'):
                 xents = []
@@ -230,6 +232,7 @@ class alex_ssd(net.Net):
                     loss_list.append(loss)
                 loss = tf.add_n(loss_list)
                 tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.add_to_collection('neg_xent', loss)
                 tf.summary.scalar('neg_xent', loss)
 
             with tf.name_scope('pos_cross_entropy'):
@@ -241,6 +244,7 @@ class alex_ssd(net.Net):
                     loss_list.append(loss)
                 loss = tf.add_n(loss_list)
                 tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.add_to_collection('pos_xent', loss)
                 tf.summary.scalar('pos_xent', loss)
 
 
@@ -254,12 +258,14 @@ class alex_ssd(net.Net):
                     loss = tf.reduce_sum(loss)
                     loc_loss.append(loss)
                 loss = tf.add_n(loc_loss)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, loss)
+                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.add_to_collection('loc_loss', loss)
                 tf.summary.scalar('loc_loss', loss)
 
-    def get_loss(self, gloc, gcls):
+    def get_loss(self, gloc, gcls, scope):
         self._ssd_loss(gloc, gcls)
-        loss = tf.get_collection(tf.GraphKeys.LOSSES) + tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        loss = tf.get_collection(tf.GraphKeys.LOSSES, scope=scope) + \
+               tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, scope=scope)
         loss = tf.add_n(loss)
         return loss
 
