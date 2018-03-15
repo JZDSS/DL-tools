@@ -2,7 +2,7 @@ from __future__ import division
 import tensorflow as tf
 from tensorflow.contrib import layers
 from tensorflow.contrib.framework import arg_scope
-from nets import net, ssd
+from nets import net
 import numpy as np
 
 # s_k = s_min + (s_max - s_min)/(m - 1)(k - 1)
@@ -39,8 +39,8 @@ class vgg16_ssd(net.Net):
 
     def l2_norm(self, x):
         x = tf.nn.l2_normalize(x, [0, 1, 2, 3])
-        gamma = 20 * tf.get_variable('gamma', shape=[1], initializer=tf.ones_initializer(tf.float32), trainable=True)
-        x = x * gamma
+        gamma = tf.get_variable('gamma', shape=[512], initializer=tf.ones_initializer(dtype=tf.float32), trainable=True)
+        x = x * gamma * 20
         return x
 
     def build(self, inputs):
@@ -169,7 +169,7 @@ class vgg16_ssd(net.Net):
             tf.summary.histogram('feature_map_%d' % i,  feature_map)
         with tf.variable_scope(tf.get_variable_scope(), reuse=True):
             v = tf.get_variable('l2_norm/gamma')
-            tf.summary.scalar('scalar', tf.reduce_mean(v))
+            tf.summary.scalar('gamma_mean', tf.reduce_mean(v))
 
     def hard_negtave_mining(self, labels):
         """
@@ -191,9 +191,9 @@ class vgg16_ssd(net.Net):
             scores = tf.nn.softmax(prediction)[:, :, :, :, 0]
             neg_scores = tf.cast(neg_mask, tf.float32) * scores
             flat_neg = tf.reshape(neg_scores, [-1])
-            val, _ = tf.nn.top_k(flat_neg, num_negtave)
-            minval = val[-1]
-            neg_mask = tf.greater(flat_neg, minval)
+            val, _ = tf.nn.top_k(-flat_neg, num_negtave)
+            maxval = -val[-1]
+            neg_mask = tf.less(flat_neg, maxval)
             neg_mask = tf.reshape(neg_mask, pos_mask.shape)
             neg_mask_list.append(neg_mask)
             pos_mask_list.append(pos_mask)
@@ -215,8 +215,6 @@ class vgg16_ssd(net.Net):
         with tf.name_scope('hard_negtave_mining'):
             pos_mask_list, neg_mask_list = self.hard_negtave_mining(gcls)
         with tf.name_scope('losses'):
-            with tf.name_scope('regularization'):
-                tf.summary.scalar('regular', tf.add_n(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
 
             with tf.name_scope('cross_entropy'):
                 xents = []
@@ -234,6 +232,7 @@ class vgg16_ssd(net.Net):
                     loss_list.append(loss)
                 loss = tf.add_n(loss_list)
                 tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.add_to_collection('neg_xent', loss)
                 tf.summary.scalar('neg_xent', loss)
 
             with tf.name_scope('pos_cross_entropy'):
@@ -245,6 +244,7 @@ class vgg16_ssd(net.Net):
                     loss_list.append(loss)
                 loss = tf.add_n(loss_list)
                 tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.add_to_collection('pos_xent', loss)
                 tf.summary.scalar('pos_xent', loss)
 
 
@@ -259,11 +259,13 @@ class vgg16_ssd(net.Net):
                     loc_loss.append(loss)
                 loss = tf.add_n(loc_loss)
                 tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+                tf.add_to_collection('loc_loss', loss)
                 tf.summary.scalar('loc_loss', loss)
 
-    def get_loss(self, gloc, gcls):
+    def get_loss(self, gloc, gcls, scope):
         self._ssd_loss(gloc, gcls)
-        loss = tf.get_collection(tf.GraphKeys.LOSSES) + tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        loss = tf.get_collection(tf.GraphKeys.LOSSES, scope=scope) + \
+               tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, scope=scope)
         loss = tf.add_n(loss)
         return loss
 
