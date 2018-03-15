@@ -5,11 +5,11 @@ muti_gpus/__pycache__/
 official/
 out/
 stand_alone/
-logs/
+logs*/
 ignore/
 *.caffemodel
 *.npy
 *.tfrecords
 *log
-ckpt/
+ckpt*/
 
