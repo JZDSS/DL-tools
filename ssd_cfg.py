@@ -14,6 +14,8 @@ flags.DEFINE_integer('start_step', 0, 'start steps')
 flags.DEFINE_string('model_name', 'ssd_model', '')
 flags.DEFINE_string('gpu', '0', '')
 flags.DEFINE_string('out_file', 'logs/ssd_train_log', '')
+flags.DEFINE_float('learning_rate', 0.0001, '')
+flags.DEFINE_string('trainable_scope', '', '')
 # flags.DEFINE_integer('patch_size', 64, '')
 
 

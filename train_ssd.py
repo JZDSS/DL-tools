@@ -53,7 +53,7 @@ def main(_):
         # learning_rate = tf.train.piecewise_constant(global_step, [10000, 70000, 120000, 170000, 220000],
         #                                                         [0.01, 0.1, 0.001, 0.0001, 0.00001, 0.000001])
         # learning_rate = tf.constant(0.001)
-        learning_rate = tf.train.exponential_decay(0.001, global_step, 800, 0.98, staircase=True)
+        learning_rate = tf.train.exponential_decay(FLAGS.learning_rate, global_step, 800, 0.96, staircase=True)
         print('learning_rate = tf.train.exponential_decay(0.05, global_step, 30000, 0.1, staircase=True)', file=f)
 
         # opt = tf.train.AdamOptimizer(learning_rate)
@@ -65,12 +65,11 @@ def main(_):
         print('weight decay = %e' % FLAGS.weight_decay, file=f)
         f.flush()
         tf.summary.scalar('learing rate', learning_rate)
-        tower_grads = []
-        tower_loss = []
+
 
         i_and_l = ssd_input.input_pipeline(
             tf.train.match_filenames_once(os.path.join('nets/ssd', '*.tfrecords')),
-            FLAGS.batch_size * num_gpus, read_threads=1)
+            FLAGS.batch_size * num_gpus, read_threads=4)
         images = i_and_l[0]
         locations = i_and_l[1:len(i_and_l) // 2 + 1]
         labels = i_and_l[len(i_and_l) // 2 + 1:]
@@ -95,26 +94,47 @@ def main(_):
         with tf.name_scope('CPU'):
             net.build(tf.placeholder(dtype=tf.float32, shape=[None, 300, 300, 3]))
     var_list = []
-    for scope in ['l2_norm', 'conv8', 'conv9', 'conv10', 'conv11']:
+    # for scope in ['l2_norm', 'conv8', 'conv9', 'conv10', 'conv11']:
+    #     var_list += tf.trainable_variables(scope=scope)
+    for scope in FLAGS.trainable_scope.split(','):
         var_list += tf.trainable_variables(scope=scope)
+
+    tower_grads = []
+    tower_loss = []
+    tower_loss_neg = []
+    tower_loss_pos = []
+    tower_loss_loc = []
     for i in range(num_gpus):
         with tf.device('/gpu:%d' % i):
-            with tf.name_scope('tower_%d' % i):
+            with tf.name_scope('tower_%d' % i) as scope:
                 with tf.variable_scope(tf.get_variable_scope(), reuse=True):
                     net.build(image_batch[i])
-                    loss = net.get_loss(location_batch[i], label_batch[i])
+                    loss = net.get_loss(location_batch[i], label_batch[i], scope)
                     grads = opt.compute_gradients(loss, var_list=var_list)
                     tower_grads.append(grads)
                     tower_loss.append(loss)
+                    tower_loss_neg.append(tf.add_n(tf.get_collection('neg_xent', scope=scope)))
+                    tower_loss_pos.append(tf.add_n(tf.get_collection('pos_xent', scope=scope)))
+                    tower_loss_loc.append(tf.add_n(tf.get_collection('loc_loss', scope=scope)))
 
-
-
+    net.add_summary()
     with tf.name_scope('scores'):
-        with tf.name_scope('batch_loss'):
-            batch_loss = tf.add_n(tower_loss)/num_gpus
-            net.add_summary()
 
-        tf.summary.scalar('loss', batch_loss)
+        with tf.name_scope('neg_loss'):
+            batch_loss = tf.add_n(tower_loss_neg)/num_gpus
+            tf.summary.scalar('neg_loss', batch_loss)
+
+        with tf.name_scope('pos_loss'):
+            batch_loss = tf.add_n(tower_loss_pos)/num_gpus
+            tf.summary.scalar('pos_loss', batch_loss)
+
+        with tf.name_scope('loc_loss'):
+            batch_loss = tf.add_n(tower_loss_loc)/num_gpus
+            tf.summary.scalar('loc_loss', batch_loss)
+
+        with tf.name_scope('total_loss'):
+            batch_loss = tf.add_n(tower_loss)/num_gpus
+            tf.summary.scalar('total_loss', batch_loss)
 
     grads = average_gradients(tower_grads)
 
@@ -131,10 +151,11 @@ def main(_):
     # summary_op = tf.summary.merge_all()
     # init = tf.global_variables_initializer()
     summary_op = tf.summary.merge_all()
-
-    saver = tf.train.Saver(name="saver", max_to_keep=10)
+    saver = tf.train.Saver(name="saver", max_to_keep=10, var_list=var_list)
     with tf.Session(config=config) as sess:
         sess.run(tf.local_variables_initializer())
+        sess.run(tf.global_variables_initializer())
+
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
 
@@ -142,13 +163,12 @@ def main(_):
             try:
                 print('restore from ckpt')
                 saver.restore(sess, tf.train.latest_checkpoint(FLAGS.ckpt_dir))
-            except:
+            except Exception as e:
+                print(e)
                 print('restore failed, load weights from vgg16')
-                sess.run(tf.global_variables_initializer())
                 sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
         else:
             print('train from vgg16')
-            sess.run(tf.global_variables_initializer())
             sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
         if FLAGS.start_step != 0:
             sess.run(tf.assign(global_step, FLAGS.start_step))
@@ -161,7 +181,7 @@ def main(_):
                 loss, summ, lr = sess.run([batch_loss, summary_op, learning_rate])
                 train_writer.add_summary(summ, i)
                 saver.save(sess, os.path.join(FLAGS.ckpt_dir, FLAGS.model_name), global_step=i)
-                print('loss=%f'%loss)
+                print('step%d,loss=%f'%(i,loss))
                 train_writer.flush()
             sess.run(train_op)
 
