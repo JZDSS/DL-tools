@@ -2,7 +2,7 @@ import tensorflow as tf
 import logging
 
 class Net(object):
-    def __init__(self, name):
+    def __init__(self, name, *args, **kwargs):
         self.name = name
         self.inputs = None
         self.output = None

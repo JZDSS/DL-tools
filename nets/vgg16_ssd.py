@@ -2,46 +2,21 @@ from __future__ import division
 import tensorflow as tf
 from tensorflow.contrib import layers
 from tensorflow.contrib.framework import arg_scope
-from nets import net
+from nets import ssdnet
 import numpy as np
 
-# s_k = s_min + (s_max - s_min)/(m - 1)(k - 1)
-default_anchor_scales = [0.2, 0.34, 0.48, 0.62, 0.76, 0.9]        # of original image size
-# s_k^{'} = sqrt(s_k*s_k+1)
-default_ext_anchor_scales = [0.26, 0.28, 0.43, 0.60, 0.78, 0.98]  # of original image size
-# omitted aspect ratio 1
-default_aspect_ratios = [[1/2, 2],                          # conv4_3
-                         [1/3, 1/2, 2, 3],                  # conv7
-                         [1/3, 1/2, 2, 3],                  # conv8_2
-                         [1/3, 1/2, 2, 3],                  # conv9_2
-                         [1 / 2, 2],                        # conv10_2
-                         [1 / 2, 2]]                        # conv11_2
 
-class vgg16_ssd(net.Net):
+class vgg16_ssd(ssdnet.SSDNet):
 
     def __init__(self, vgg16_path='ssd/vgg16/vgg16.npy', weight_decay=0.0005,
-                 num_classes=20, anchor_scales=default_anchor_scales, aspect_ratios=default_aspect_ratios,
-                 ext_anchors=default_ext_anchor_scales):
-        super(vgg16_ssd, self).__init__(name='vgg16_ssd')
+                 num_classes=20, *args, **kwargs):
+        super(vgg16_ssd, self).__init__(name='vgg16_ssd', *args, *kwargs)
         self.vgg16_path = vgg16_path
         self.weight_decay = weight_decay
         self.num_classes = num_classes
-        self.anchor_scales = anchor_scales
-        # self.num_anchors = len(anchor_scales)
-        self.aspect_ratios = aspect_ratios
-        self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
-        self.ext_anchors = ext_anchors
-        self.feature_map_size = []
-        self.feature_maps = None
 
     def set_pre_trained_weight_path(self, path):
         self.vgg16_path = path
-
-    def l2_norm(self, x):
-        x = tf.nn.l2_normalize(x, [0, 1, 2, 3])
-        gamma = tf.get_variable('gamma', shape=[512], initializer=tf.ones_initializer(dtype=tf.float32), trainable=True)
-        x = x * gamma * 20
-        return x
 
     def build(self, inputs):
         feature_maps = []
@@ -56,7 +31,7 @@ class vgg16_ssd(net.Net):
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool3')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv4')
             with tf.variable_scope('l2_norm'):
-                y = self.l2_norm(y)
+                y = self.l2_norm(y, 512)
             feature_maps.append(y)
             y = layers.max_pool2d(y, [2, 2], 2, 'SAME', scope='pool4')
             y = layers.repeat(y, 3, layers.conv2d, 512, [3, 3], 1, scope='conv5')
@@ -112,12 +87,6 @@ class vgg16_ssd(net.Net):
         self.feature_maps = feature_maps
         # return predictions
 
-    def get_update_ops(self):
-        return tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-
-    def loss(self, logits, labels, *args, **kwargs):
-        pass
-
     def _setup(self):
         """Define ops that load pre-trained vgg16 net's weights and biases and add them to tf.GraphKeys.INIT_OP
         collection.
@@ -170,97 +139,6 @@ class vgg16_ssd(net.Net):
         with tf.variable_scope(tf.get_variable_scope(), reuse=True):
             v = tf.get_variable('l2_norm/gamma')
             tf.summary.scalar('gamma_mean', tf.reduce_mean(v))
-
-    def hard_negtave_mining(self, labels):
-        """
-        :param predictions: List of predictions of all feature maps
-        :param labels: List of labels of all fearure maps
-        :return:
-        """
-        predictions = self.classification
-        pos_mask_list = []
-        neg_mask_list = []
-        for i in range(len(predictions)):
-            # for every feature map
-            prediction = predictions[i]
-            label = labels[i]
-            pos_mask = tf.not_equal(label, 0)
-            neg_mask = tf.logical_not(pos_mask)
-            num_positive = tf.reduce_sum(tf.cast(pos_mask, tf.int32))
-            num_negtave = tf.minimum(num_positive * 3 + 1, tf.reduce_sum(tf.cast(neg_mask, tf.int32)))
-            scores = tf.nn.softmax(prediction)[:, :, :, :, 0]
-            neg_scores = tf.cast(neg_mask, tf.float32) * scores
-            flat_neg = tf.reshape(neg_scores, [-1])
-            val, _ = tf.nn.top_k(-flat_neg, num_negtave)
-            maxval = -val[-1]
-            neg_mask = tf.less(flat_neg, maxval)
-            neg_mask = tf.reshape(neg_mask, pos_mask.shape)
-            neg_mask_list.append(neg_mask)
-            pos_mask_list.append(pos_mask)
-
-        return pos_mask_list, neg_mask_list
-
-    def smooth_l1_loss(self, x):
-        """
-        Computes smooth l1 loss: x^2 / 2 if abs(x) < 1, abs(x) - 0.5 otherwise.
-        See [Fast R-CNN](https://arxiv.org/abs/1504.08083)
-        :param x: An input Tensor to calculate smooth L1 loss.
-        """
-        square_loss = 0.5 * x ** 2
-        absolute_loss = tf.abs(x)
-        loss = tf.where(tf.less(absolute_loss, 1.), square_loss, absolute_loss - 0.5)
-        return loss
-
-    def _ssd_loss(self, gloc, gcls):
-        with tf.name_scope('hard_negtave_mining'):
-            pos_mask_list, neg_mask_list = self.hard_negtave_mining(gcls)
-        with tf.name_scope('losses'):
-
-            with tf.name_scope('cross_entropy'):
-                xents = []
-                for i in range(len(neg_mask_list)):
-                    xent = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.classification[i],
-                                                                          labels=gcls[i])
-                    xents.append(xent)
-
-            with tf.name_scope('neg_cross_entropy'):
-                loss_list = []
-                for i, indices in enumerate(neg_mask_list):
-                    loss = tf.cast(neg_mask_list[i], tf.float32) * xents[i]
-                    loss = tf.reduce_mean(loss, axis=0)
-                    loss = tf.reduce_sum(loss)
-                    loss_list.append(loss)
-                loss = tf.add_n(loss_list)
-                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
-                tf.add_to_collection('neg_xent', loss)
-                tf.summary.scalar('neg_xent', loss)
-
-            with tf.name_scope('pos_cross_entropy'):
-                loss_list = []
-                for i, indices in enumerate(neg_mask_list):
-                    loss = tf.cast(pos_mask_list[i], tf.float32) * xents[i]
-                    loss = tf.reduce_mean(loss, axis=0)
-                    loss = tf.reduce_sum(loss)
-                    loss_list.append(loss)
-                loss = tf.add_n(loss_list)
-                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
-                tf.add_to_collection('pos_xent', loss)
-                tf.summary.scalar('pos_xent', loss)
-
-
-            with tf.name_scope('location_loss'):
-                loc_loss = []
-                for i in range(len(self.location)):
-                    loss = self.smooth_l1_loss(gloc[i] - self.location[i])
-                    loss = tf.reduce_sum(loss, -1)
-                    loss = tf.cast(pos_mask_list[i], tf.float32) * loss
-                    loss = tf.reduce_mean(loss, axis=0)
-                    loss = tf.reduce_sum(loss)
-                    loc_loss.append(loss)
-                loss = tf.add_n(loc_loss)
-                tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
-                tf.add_to_collection('loc_loss', loss)
-                tf.summary.scalar('loc_loss', loss)
 
     def get_loss(self, gloc, gcls, scope):
         self._ssd_loss(gloc, gcls)
