@@ -62,23 +62,23 @@ class vgg16(net.Net):
                 tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
                 tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
 
+with tf.device('/cpu:0'):
+    x = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
+    net = vgg16()
+    pred = net.build(x)
 
-x = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
-net = vgg16()
-pred = net.build(x)
+    net.setup()
 
-net.setup()
+    init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
 
-init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
-
-import cv2
-img = cv2.imread('/home/yqi/Pictures/12935266_1345019827406.jpg')
-img = cv2.resize(img, (224, 224))
-img = np.expand_dims(img, 0)
-with tf.Session() as sess:
-    # tf.global_variables_initializer().run()
-    sess.run(init_ops)
-    # with tf.variable_scope('conv1/conv1_1', reuse=True):
-    #     print(sess.run(tf.get_variable('weights')))
-    print(sess.run(tf.argmax(pred, 1), feed_dict={x: img}))
+    import cv2
+    img = cv2.imread('/home/yqi/Pictures/lion.jpeg')
+    img = cv2.resize(img, (224, 224))
+    img = np.expand_dims(img, 0)
+    with tf.Session() as sess:
+        # tf.global_variables_initializer().run()
+        sess.run(init_ops)
+        # with tf.variable_scope('conv1/conv1_1', reuse=True):
+        #     print(sess.run(tf.get_variable('weights')))
+        print(sess.run(tf.argmax(pred, 1), feed_dict={x: img}))
 
