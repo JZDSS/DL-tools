@@ -277,7 +277,8 @@ def read_from_tfrecord(tfrecord_file_queue):
     # height = tfrecord_features['height']
     # width = tfrecord_features['width']
     image = tf.image.decode_jpeg(tfrecord_features['image_string'], 3)
-
+    image = tf.reverse(image, axis=[-1])
+    # image = tf.transpose(image, [2, 1, 0])
     # image.set_shape([height, width, 3])
     labels = tf.sparse_tensor_to_dense(tfrecord_features['labels'])
     ymin = tf.sparse_tensor_to_dense(tfrecord_features['ymin'])
@@ -290,9 +291,9 @@ def read_from_tfrecord(tfrecord_file_queue):
     locations, labels = bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales,
                                 aspect_ratios, feature_map_size, num_boxes,
                                 threshold=0.5)
-    mean = tf.constant([123, 117, 104], dtype=image.dtype)
-    mean = tf.reshape(mean, [1, 1, 3])
-    image = image - mean
+    # mean = tf.constant([123, 117, 104], dtype=image.dtype)
+    # mean = tf.reshape(mean, [1, 1, 3])
+    # image = image - mean
 
 
 
