@@ -46,13 +46,13 @@ class AlexNet(net.Net):
             endpoint['conv5_1'] = y1
             endpoint['conv5_2'] = y2
             y = tf.concat([y1, y2], 3)
-            y = layers.max_pool2d(y, [3, 3], 2, 'SAME', scope='pool5')
+            y = layers.max_pool2d(y, [3, 3], 2, 'VALID', scope='pool5')
             y = layers.conv2d(y, 4096, [6, 6], 1, 'VALID', scope='fc6')
             endpoint['fc6'] = y
             y = layers.conv2d(y, 4096, [1, 1], 1, 'VALID', scope='fc7')
             endpoint['fc7'] = y
             y = layers.conv2d(y, 1000, [1, 1], 1, 'VALID', scope='fc8', activation_fn=None)
-            self.logits = y
+            self.logits = tf.squeeze(y)
 
     def loss(self, logits, labels, *args, **kwargs):
         pass
@@ -79,7 +79,7 @@ class AlexNet(net.Net):
             weights = tf.get_variable('weights')
             biases = tf.get_variable('biases')
             w = weight_dict['fc6']['weights']
-            w = np.reshape(w, (7, 7, 512, 4096))
+            w = np.reshape(w, (6, 6, 256, 4096))
             w_init_op = weights.assign(w)
             b_init_op = biases.assign(weight_dict['fc6']['biases'])
             tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
