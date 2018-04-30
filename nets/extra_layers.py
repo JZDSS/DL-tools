@@ -4,10 +4,10 @@ import tensorflow.contrib.layers as layers
 def atrous_conv2d(inputs,
                   num_outputs,
                   kernel_size,
-                  padding='SAME',
                   rate=1,
+                  padding='SAME',
                   activation_fn=tf.nn.relu,
-                  weights_initializer=layers.initializers.xavier_initializer(),
+                  weights_initializer=layers.xavier_initializer(),
                   weights_regularizer=None,
                   biases_initializer=tf.zeros_initializer(),
                   biases_regularizer=None,
@@ -16,7 +16,7 @@ def atrous_conv2d(inputs,
                   outputs_collections=None,
                   trainable=True,
                   scope=None):
-    shape = inputs.get_shape().to_list()
+    shape = inputs.get_shape().as_list()
     with tf.variable_scope(scope, reuse=reuse):
         w = tf.get_variable('weights',
                             shape=[kernel_size[0], kernel_size[1], shape[-1], num_outputs],
