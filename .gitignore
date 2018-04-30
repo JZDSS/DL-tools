@@ -1,5 +1,5 @@
 .idea/
-muti_gpus/__pycache__/
+*/__pycache__/
 *~
 *.pyc
 official/
