@@ -17,6 +17,7 @@ def atrous_conv2d(inputs,
                   trainable=True,
                   scope=None):
     shape = inputs.get_shape().as_list()
+
     with tf.variable_scope(scope, reuse=reuse):
         w = tf.get_variable('weights',
                             shape=[kernel_size[0], kernel_size[1], shape[-1], num_outputs],
