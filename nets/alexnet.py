@@ -52,6 +52,7 @@ class AlexNet(net.Net):
             y = layers.conv2d(y, 4096, [1, 1], 1, 'VALID', scope='fc7')
             endpoints['fc7'] = y
             y = layers.conv2d(y, 1000, [1, 1], 1, 'VALID', scope='fc8', activation_fn=None)
+            endpoints['fc8'] = y
             self.logits = tf.squeeze(y)
 
     def loss(self, logits, labels, *args, **kwargs):
