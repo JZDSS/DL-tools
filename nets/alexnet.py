@@ -32,6 +32,7 @@ class AlexNet(net.Net):
             endpoints['conv2_1'] = y1
             endpoints['conv2_2'] = y2
             y = tf.concat([y1, y2], 3)
+            endpoints['conv2'] = y
             y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
             y = layers.max_pool2d(y, [3, 3], 2, 'VALID', scope='pool2')
             y = layers.conv2d(y, 384, [3, 3], 1, 'SAME', scope='conv3')
@@ -46,6 +47,7 @@ class AlexNet(net.Net):
             endpoints['conv5_1'] = y1
             endpoints['conv5_2'] = y2
             y = tf.concat([y1, y2], 3)
+            endpoints['conv5'] = y
             y = layers.max_pool2d(y, [3, 3], 2, 'VALID', scope='pool5')
             y = layers.conv2d(y, 4096, [6, 6], 1, 'VALID', scope='fc6')
             endpoints['fc6'] = y
