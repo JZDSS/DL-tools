@@ -44,3 +44,7 @@ def atrous_conv2d(inputs,
 
 def unpool(inputs):
     pass
+
+
+def safe_division(x, y):
+    return tf.case([(tf.equal(y, 0), lambda: tf.zeros_like(x))], lambda: x / y)
