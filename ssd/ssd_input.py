@@ -277,10 +277,10 @@ def read_from_tfrecord(tfrecord_file_queue):
     locations, labels = bounding_boxes2ground_truth(bboxes, labels, anchor_scales, ext_anchor_scales,
                                 aspect_ratios, feature_map_size, num_boxes,
                                 threshold=0.5)
-    # mean = tf.constant([123, 117, 104], dtype=image.dtype)
-    # mean = tf.reshape(mean, [1, 1, 3])
-    # image = image - mean
-
+    mean = tf.constant([123, 117, 104], dtype=image.dtype)
+    mean = tf.reshape(mean, [1, 1, 3])
+    image = image - mean
+    image = image / 128.0
 
 
     return [image] + locations + labels
@@ -295,11 +295,11 @@ def input_pipeline(filenames, batch_size, read_threads, num_epochs=None):
     min_after_dequeue = 1000
     capacity = min_after_dequeue + 3 * batch_size
 
-    e = tf.train.shuffle_batch_join(example_list, batch_size=batch_size,
-                                    capacity=capacity, min_after_dequeue=min_after_dequeue)
-    # e = tf.train.batch_join(example_list, batch_size=batch_size,
-    #                         capacity=capacity
-    #                         )
+    # e = tf.train.shuffle_batch_join(example_list, batch_size=batch_size,
+    #                                 capacity=capacity, min_after_dequeue=min_after_dequeue)
+    e = tf.train.batch_join(example_list, batch_size=batch_size,
+                            capacity=capacity
+                            )
     images = e[0]
     locations = e[1:len(e) // 2 + 1]
     labels = e[len(e) // 2 + 1:]
@@ -315,23 +315,24 @@ def main():
     import cv2
     with tf.device('/cpu:0'):
         images, locations, labels = input_pipeline(
-            tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 1, read_threads=1)
+            tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 10, read_threads=1)
 
     with tf.Session() as sess:
         train_writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
         train_writer.flush()
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
-        # sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+        sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
-        for i in range(100):
-            s = sess.run(images)
-            s = np.squeeze(s).astype(np.uint8)
-            print(s)
-            cv2.imshow("", s)
-            cv2.waitKey(0)
-            # train_writer.add_summary(s, i)
+        s = sess.run(locations)
+        # for i in range(100):
+        #     s = sess.run(images)
+        #     s = np.squeeze(s).astype(np.uint8)
+        #     print(s)
+        #     cv2.imshow("", s)
+        #     cv2.waitKey(0)
+        #     # train_writer.add_summary(s, i)
 
         coord.request_stop()
         coord.join(threads)
