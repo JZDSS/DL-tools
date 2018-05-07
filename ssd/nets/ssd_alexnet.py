@@ -39,11 +39,14 @@ class SSD_AlexNet(alexnet.AlexNet):
     def down_sample(self):
         endpoints = self.endpoints
         y = endpoints['conv5']
-        with tf.variable_scope('rebuild'):
-            y = utils.atrous_conv2d(y, 1024, [3, 3], 6, 'SAME', scope='fc6')
-            endpoints['fc6'] = y
-            y = layers.conv2d(y, 1024, [1, 1], 1, 'VALID', scope='fc7')
-            endpoints['fc7'] = y
+        with tf.contrib.framework.arg_scope([layers.conv2d],
+                       weights_regularizer=layers.l2_regularizer(0.0001),
+                       biases_regularizer=layers.l2_regularizer(0.0001)):
+            with tf.variable_scope('rebuild'):
+                y = layers.conv2d(y, 1024, [3, 3], 1, 'SAME', rate=6, scope='fc6')
+                endpoints['fc6'] = y
+                y = layers.conv2d(y, 1024, [1, 1], 1, 'VALID', scope='fc7')
+                endpoints['fc7'] = y
 
     def ssd_setup(self):
         weight_dict = np.load(self.npy_path, encoding="latin1").item()
@@ -75,51 +78,57 @@ class SSD_AlexNet(alexnet.AlexNet):
 
     def extra_net(self):
         endpoints = self.endpoints
-        y = endpoints['fc7']
-        y = layers.conv2d(y, 256, [1, 1], 1, 'SAME', scope='conv8_1')
-        endpoints['conv8_1'] = y
-        y = layers.conv2d(y, 512, [3, 3], 2, 'SAME', scope='conv8_2')
-        endpoints['conv8_2'] = y
-        y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv9_1')
-        endpoints['conv9_1'] = y
-        y = layers.conv2d(y, 256, [3, 3], 2, 'SAME', scope='conv9_2')
-        endpoints['conv9_2'] = y
-        y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv10_1')
-        endpoints['conv10_1'] = y
-        y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv10_2')
-        endpoints['conv10_2'] = y
-        y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv11_1')
-        endpoints['conv11_1'] = y
-        y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv11_2')
-        endpoints['conv11_2'] = y
+        with tf.contrib.framework.arg_scope([layers.conv2d],
+                                            weights_regularizer=layers.l2_regularizer(0.0001),
+                                            biases_regularizer=layers.l2_regularizer(0.0001)):
+            y = endpoints['fc7']
+            y = layers.conv2d(y, 256, [1, 1], 1, 'SAME', scope='conv8_1')
+            endpoints['conv8_1'] = y
+            y = layers.conv2d(y, 512, [3, 3], 2, 'SAME', scope='conv8_2')
+            endpoints['conv8_2'] = y
+            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv9_1')
+            endpoints['conv9_1'] = y
+            y = layers.conv2d(y, 256, [3, 3], 2, 'SAME', scope='conv9_2')
+            endpoints['conv9_2'] = y
+            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv10_1')
+            endpoints['conv10_1'] = y
+            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv10_2')
+            endpoints['conv10_2'] = y
+            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv11_1')
+            endpoints['conv11_1'] = y
+            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv11_2')
+            endpoints['conv11_2'] = y
 
     def predict(self):
         feature_maps = [self.endpoints[f] for f in self.feature_from]
         self.location = []
         self.classification = []
-        for i, feature_map in enumerate(feature_maps):
-            num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
-            prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i)
+        with tf.contrib.framework.arg_scope([layers.conv2d],
+                                            weights_regularizer=layers.l2_regularizer(0.0001),
+                                            biases_regularizer=layers.l2_regularizer(0.0001)):
+            for i, feature_map in enumerate(feature_maps):
+                num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
+                prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
 
-            locations, classifications = tf.split(prediction,
-                                                  [self.num_anchors[i] * 4,
-                                                   self.num_anchors[i] * (self.num_classes + 1)],
-                                                  -1)
-            shape = locations.get_shape()
-            locations = tf.reshape(locations, [-1,
-                                               shape[1],
-                                               shape[2],
-                                               self.num_anchors[i],
-                                               4])
-            shape = classifications.get_shape()
-            classifications = tf.reshape(classifications,
-                                         [-1,
-                                          shape[1],
-                                          shape[2],
-                                          self.num_anchors[i],
-                                          (self.num_classes + 1)])
-            self.location.append(locations)
-            self.classification.append(classifications)
+                locations, classifications = tf.split(prediction,
+                                                      [self.num_anchors[i] * 4,
+                                                       self.num_anchors[i] * (self.num_classes + 1)],
+                                                      -1)
+                shape = locations.get_shape()
+                locations = tf.reshape(locations, [-1,
+                                                   shape[1],
+                                                   shape[2],
+                                                   self.num_anchors[i],
+                                                   4])
+                shape = classifications.get_shape()
+                classifications = tf.reshape(classifications,
+                                             [-1,
+                                              shape[1],
+                                              shape[2],
+                                              self.num_anchors[i],
+                                              (self.num_classes + 1)])
+                self.location.append(locations)
+                self.classification.append(classifications)
 
     def get_loss(self):
         cls_loss = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
@@ -138,6 +147,7 @@ class SSD_AlexNet(alexnet.AlexNet):
 
         masks = []
         poss = []
+        negs = []
         for i, cls in enumerate(cls_loss_list):
             sorted_cls_loss = tf.contrib.framework.sort(cls, -1, 'DESCENDING')
             labels = flattened_label_list[i]
@@ -154,49 +164,189 @@ class SSD_AlexNet(alexnet.AlexNet):
             mask = tf.logical_or(pos, neg)
             ass = tf.assert_none_equal(num_pos, 0)
             tf.add_to_collection(ass, "ASSERT")
-            masks.append(utils.safe_division(tf.to_float(mask), tf.to_float(num_selected)))
+            # masks.append(tf.to_float(mask))
+            # poss.append(tf.to_float(pos))
+            # negs.append(tf.to_float(neg))
+            masks.append(utils.safe_division(tf.to_float(mask), tf.to_float(num_pos)))
             poss.append(utils.safe_division(tf.to_float(pos), tf.to_float(num_pos)))
+            negs.append(utils.safe_division(tf.to_float(neg), tf.to_float(num_pos)))
 
         cls_mask = tf.stack([m for m in masks], axis=0)
-        loc_mask = tf.stack([m for m in poss], axis=0)
+        pos_mask = tf.stack([m for m in poss], axis=0)
+        neg_mask = tf.stack([m for m in negs], axis=0)
 
-        cls_loss = tf.multiply(cls_loss, cls_mask)
-        cls_loss = tf.reduce_sum(cls_loss, axis=-1)
-        cls_loss = tf.reduce_mean(cls_loss)
+        cls_loss_pos = tf.multiply(cls_loss, pos_mask)
+        cls_loss_pos = tf.reduce_sum(cls_loss_pos, axis=-1)
+        cls_loss_pos = tf.reduce_mean(cls_loss_pos)
 
-        loc_loss = tf.multiply(loc_loss, loc_mask)
+        cls_loss_neg = tf.multiply(cls_loss, neg_mask)
+        cls_loss_neg = tf.reduce_sum(cls_loss_neg, axis=-1)
+        cls_loss_neg = tf.reduce_mean(cls_loss_neg)
+
+        loc_loss = tf.multiply(loc_loss, pos_mask)
         loc_loss = tf.reduce_sum(loc_loss, axis=-1)
         loc_loss = tf.reduce_mean(loc_loss)
 
-        total_loss = loc_loss + cls_loss
+        tf.summary.scalar('loc_loss', loc_loss)
+        tf.summary.scalar('cls_loss_pos', cls_loss_pos)
+        tf.summary.scalar('cls_loss_neg', cls_loss_neg)
 
+        total_loss = loc_loss + cls_loss_pos + cls_loss_neg
+        tf.summary.scalar('total_loss', total_loss)
         return total_loss
+
+
+
+
 
 if __name__ == '__main__':
     from ssd import ssd_input
     import os
     import time
+
+    log_dir = '../../log/ssd'
+    ckpt_dir = '../../ckpt/ssd'
     images, locations, labels = ssd_input.input_pipeline(
-        tf.train.match_filenames_once(os.path.join('../../ssd', '*.tfrecords')), 2, read_threads=1)
-    net = SSD_AlexNet(images, 20, {'locations':locations, 'labels':labels}, npy_path='../../npy/alexnet.npy')
+        tf.train.match_filenames_once(os.path.join('../../ssd', '*.tfrecords')), 8, read_threads=1)
+    tf.summary.image('image', images, 1)
+    # tf.summary.histogram('location', locations)
+    net = SSD_AlexNet(images, 3, {'locations':locations, 'labels':labels}, npy_path='../../npy/alexnet.npy')
     loss = net.get_loss()
-    optimizer = tf.train.AdamOptimizer(0.0001)
+
+    optimizer = tf.train.AdamOptimizer(0.001)
     train_op = optimizer.minimize(loss)
+    saver = tf.train.Saver(name="saver", max_to_keep=10)
+    for i, l in enumerate(locations):
+        pl = net.location[i]
+        tf.summary.histogram('gtl%d'%i, l)
+        tf.summary.histogram('prl%d'%i, pl)
+    summ = tf.summary.merge_all()
     with tf.Session() as sess:
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
-        sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+
+        i = 0
+        if os.listdir(ckpt_dir):
+            print('train from ckpt')
+            dir = tf.train.latest_checkpoint(ckpt_dir)
+            i = int(dir.split('-')[-1])
+            saver.restore(sess, dir)
+        else:
+            print('train from alexnet')
+            sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+        train_writer = tf.summary.FileWriter(log_dir, sess.graph)
+        train_writer.flush()
+
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(coord=coord)
-        d = 1
-        i = 0
+
+        ll = sess.run(net.location)
+        d = 100
+
         while True:
             if i % d == 0:
-                _, l = sess.run([train_op, loss])
-                print(i, l)
-            else:
-                sess.run(train_op)
+                saver.save(sess, os.path.join(ckpt_dir, 'ssd_model'), global_step=i)
+                summary = sess.run(summ)
+                train_writer.add_summary(summary, i)
+                train_writer.flush()
+                if i != 0:
+                    time.sleep(10)
+            sess.run(train_op)
             i += 1
 
         coord.request_stop()
         coord.join(threads)
+
+# import os
+# import cv2
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from ssd import ssd_input
+# anchors = []
+# for i, size in enumerate(feature_map_size):
+#     # d for default boxes(anchors)
+#     # x and y coordinate of centers of every cell, normalized to [0, 1]
+#     d_cy, d_cx = np.mgrid[0:size[0], 0:size[1]].astype(np.float32)
+#     d_cx = (d_cx + 0.5) / size[1]
+#     d_cy = (d_cy + 0.5) / size[0]
+#     d_cx = np.expand_dims(d_cx, axis=-1)
+#     d_cy = np.expand_dims(d_cy, axis=-1)
+#
+#     # calculate width and heights
+#     d_w = []
+#     d_h = []
+#     scale = anchor_scales[i]
+#     # two aspect ratio 1 anchor scales
+#     d_w.append(ext_anchor_scales[i])
+#     d_w.append(scale)
+#     d_h.append(ext_anchor_scales[i])
+#     d_h.append(scale)
+#     # other anchor scales
+#     for ratio in aspect_ratios[i]:
+#         d_w.append(scale * np.sqrt(ratio))
+#         d_h.append(scale / np.sqrt(ratio))
+#     d_w = np.array(d_w, dtype=np.float32)
+#     d_h = np.array(d_h, dtype=np.float32)
+#
+#     d_ymin = d_cy - d_h / 2
+#     d_ymax = d_cy + d_h / 2
+#     d_xmin = d_cx - d_w / 2
+#     d_xmax = d_cx + d_w / 2
+#
+#     d_h = d_ymax - d_ymin
+#     d_w = d_xmax - d_xmin
+#     d_cx = (d_xmax + d_xmin) / 2
+#     d_cy = (d_ymax + d_ymin) / 2
+#     anchors.append(np.stack([d_cx, d_cy, d_w, d_h], -1))
+# log_dir = '../../log/ssd'
+# ckpt_dir = '../../ckpt/ssd'
+# images, locations, labels = ssd_input.input_pipeline(
+#     tf.train.match_filenames_once(os.path.join('../../ssd', '*.tfrecords')), 1, read_threads=1)
+# # tf.summary.histogram('location', locations)
+# xxx = tf.placeholder(dtype=tf.float32, shape=(None, 300, 300, 3))
+# net = SSD_AlexNet(xxx, 20, {'locations':locations, 'labels':labels}, npy_path='../../npy/alexnet.npy')
+# saver = tf.train.Saver(name="saver")
+# with tf.Session() as sess:
+#     sess.run(tf.local_variables_initializer())
+#     dir = tf.train.latest_checkpoint(ckpt_dir)
+#     saver.restore(sess, dir)
+#     coord = tf.train.Coordinator()
+#     threads = tf.train.start_queue_runners(coord=coord)
+#     while True:
+#         im = sess.run(images)
+#         locs = sess.run(net.location, feed_dict={xxx: im})
+#         labs = sess.run([tf.argmax(c, axis=-1) for c in net.classification], feed_dict={xxx: im})
+#         print(locs[0])
+#         im = im[0, :, :, :].astype(np.uint8)
+#         # plt.imshow(im)
+#         # plt.show()
+#         for n_map, lab in enumerate(labs):
+#             lab = lab[0, :, :, :]
+#             for c in range(lab.shape[-1]):
+#                 labb = lab[:,:,c]
+#                 for y in range(labb.shape[0]):
+#                     for x in range(labb.shape[1]):
+#                         if labb[y, x] != 0:
+#
+#                             bbox = locs[n_map][0, y, x, c,:]  #[cx, cy, w, h]
+#                             print(bbox)
+#                             d_cx = anchors[n_map][y, x, c, 0]
+#                             d_cy = anchors[n_map][y, x, c, 1]
+#                             d_w = anchors[n_map][y, x, c, 2]
+#                             d_h = anchors[n_map][y, x, c, 3]
+#                             bbox[0] = bbox[0] * d_w + d_cx
+#                             bbox[1] = bbox[1] * d_h + d_cy
+#                             bbox[2] = np.exp(bbox[2]) * d_w
+#                             bbox[3] = np.exp(bbox[3]) * d_h
+#                             minx = int((bbox[0] - bbox[2]/2)*300)
+#                             maxx = int((bbox[0] + bbox[2]/2)*300)
+#                             miny = int((bbox[1] - bbox[3]/2)*300)
+#                             maxy = int((bbox[1] + bbox[3]/2)*300)
+#                             cv2.rectangle(im, (minx, miny), (maxx, maxy), (0,0,255), 1)
+#
+#         # plt.imshow(im)
+#         # plt.show()
+#         cv2.imshow('', im)
+#         cv2.waitKey(0)
+#     coord.request_stop()
+#     coord.join(threads)

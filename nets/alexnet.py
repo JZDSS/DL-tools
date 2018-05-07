@@ -21,7 +21,9 @@ class AlexNet(net.Net):
     def build(self, image):
         endpoints = self.endpoints
         y = image
-        with arg_scope([layers.conv2d], activation_fn=tf.nn.relu):
+        with arg_scope([layers.conv2d], activation_fn=tf.nn.relu,
+                       weights_regularizer=layers.l2_regularizer(0.0001),
+                       biases_regularizer=layers.l2_regularizer(0.0001)):
             y = layers.conv2d(y, 96, [11, 11], 4, 'VALID', scope='conv1')
             endpoints['conv1'] = y
             y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
