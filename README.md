@@ -9,4 +9,4 @@ When running locally, the JZDSS/DL-tools/ directories should be appended to PYTH
 export PYTHONPATH=$PYTHONPATH:`pwd`
 ```
 
-Note: This command needs to run from every new terminal you start. If you wish to avoid running this manually, you can add it as a new line to the end of your ~/.bashrc file (~/.zshrc file if you use zsh rather than bash).
+Note: This command needs to run from every new terminal you start. If you wish to avoid running this manually, you can add it as a new line to the end of your ~/.bashrc file (.zshrc if you use zsh rather than bash).
