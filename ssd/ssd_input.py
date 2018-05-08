@@ -295,11 +295,11 @@ def input_pipeline(filenames, batch_size, read_threads, num_epochs=None):
     min_after_dequeue = 1000
     capacity = min_after_dequeue + 3 * batch_size
 
-    # e = tf.train.shuffle_batch_join(example_list, batch_size=batch_size,
-    #                                 capacity=capacity, min_after_dequeue=min_after_dequeue)
-    e = tf.train.batch_join(example_list, batch_size=batch_size,
-                            capacity=capacity
-                            )
+    e = tf.train.shuffle_batch_join(example_list, batch_size=batch_size,
+                                    capacity=capacity, min_after_dequeue=min_after_dequeue)
+    # e = tf.train.batch_join(example_list, batch_size=batch_size,
+    #                         capacity=capacity
+    #                         )
     images = e[0]
     locations = e[1:len(e) // 2 + 1]
     labels = e[len(e) // 2 + 1:]
