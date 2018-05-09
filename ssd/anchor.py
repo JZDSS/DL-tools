@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
-
+from ssd.protos import anchor_list_pb2
+from google.protobuf import text_format
 
 class Anchor(object):
 
@@ -18,6 +19,21 @@ class Anchor(object):
         a = np.linspace(self.min_scale, self.max_scale, self.n)
         a = 1
 
+
+anchor_list = anchor_list_pb2.AnchorList()
+# print(anchor.min_scale)
+# print(anchor.max_scale)
+with tf.gfile.GFile('ssd.config', "r") as f:
+    proto_str = f.read()
+    text_format.Merge(proto_str, anchor_list)
+
+src = []
+aspect_ratios = []
+
+for anchor in anchor_list.anchor:
+    ratio =[r for r in anchor.aspect_ratio]
+    src.append(anchor.src)
+    aspect_ratios.append(ratio)
 
 anchor_scales = [0.2, 0.34, 0.48, 0.62, 0.76, 0.9]  # of original image size
 # s_k^{'} = sqrt(s_k*s_k+1)

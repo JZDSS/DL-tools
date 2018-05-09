@@ -1,0 +1,10 @@
+message ImageConfig {
+    required int height = 1 [default=300];
+    required int width = 2 [default=300];
+    optional float minimum_jaccard_overlap = 3 [default=0.7];
+    optional float min_aspect_ratio = 4 [default=0.5];
+    optional float max_aspect_ratio = 5 [default=2];
+    optional float min_area = 6 [default=0.1];
+    optional float max_area = 7 [default=1];
+    optional bool flip = 8 [default=true];
+}

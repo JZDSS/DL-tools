@@ -1,0 +1,9 @@
+package object_detection.protos;
+
+import "ssd/protos/anchor.proto";
+
+message AnchorList {
+    required float min_scale = 1 [default=0.2];
+    required float max_scale = 2 [default=0.9];
+    repeated AnchorConfig anchor = 3;
+}

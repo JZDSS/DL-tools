@@ -1,0 +1,7 @@
+package object_detection.protos;
+
+message AnchorConfig {
+    required string src = 1;
+    repeated float aspect_ratio = 2;
+    optional bool extra_anchor = 3 [default=true];
+}
