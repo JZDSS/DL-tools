@@ -1,0 +1,10 @@
+package ssd.protos;
+
+import "ssd/protos/image.proto";
+import "ssd/protos/anchor_list.proto";
+
+message Model {
+    required ImageConfig image = 1;
+    required AnchorList anchor_list = 2;
+    required string model_name = 3;
+}

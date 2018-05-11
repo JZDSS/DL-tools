@@ -1,4 +1,4 @@
-package object_detection.protos;
+package ssd.protos;
 
 import "ssd/protos/anchor.proto";
 
