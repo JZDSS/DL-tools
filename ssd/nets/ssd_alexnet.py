@@ -2,9 +2,9 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import numpy as np
 
-from nets import alexnet
-from nets import utils
-from ssd.anchor import *
+from basenets import alexnet
+from basenets import utils
+# from ssd.config import *
 
 class SSD_AlexNet(alexnet.AlexNet):
 
@@ -12,18 +12,18 @@ class SSD_AlexNet(alexnet.AlexNet):
                  image,
                  num_classes,
                  ground_truth,
+                 anchor_config=None,
                  name='SSD_AlexNet',
                  npy_path=None,
-                 weight_decay=0.0004,
-                 feature_from=['conv2', 'fc7', 'conv8_2', 'conv9_2', 'conv10_2', 'conv11_2']):
+                 weight_decay=0.0004):
         super(SSD_AlexNet, self).__init__(image, name, npy_path)
         self.ground_truth = ground_truth
         self.num_classes = num_classes
         self.weight_decay = weight_decay
-        self.feature_from = feature_from
-        self.aspect_ratios = aspect_ratios
+        self.src = anchor_config['src']
+        self.aspect_ratios = anchor_config['aspect_ratios']
         self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
-        self.ext_anchors = ext_anchor_scales
+        self.ext_anchors = anchor_config['extra_scales']
         self.base_net()
         self.extra_net()
         self.predict()
@@ -100,7 +100,7 @@ class SSD_AlexNet(alexnet.AlexNet):
             endpoints['conv11_2'] = y
 
     def predict(self):
-        feature_maps = [self.endpoints[f] for f in self.feature_from]
+        feature_maps = [self.endpoints[f] for f in self.src]
         self.location = []
         self.classification = []
         with tf.contrib.framework.arg_scope([layers.conv2d],

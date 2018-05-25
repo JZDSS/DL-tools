@@ -6,5 +6,6 @@ import "ssd/protos/anchor_list.proto";
 message Model {
     required ImageConfig image = 1;
     required AnchorList anchor_list = 2;
-    required string model_name = 3;
+    required string name = 3;
+    required string type = 4 [default="ALEX"];
 }

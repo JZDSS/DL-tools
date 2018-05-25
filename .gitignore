@@ -12,4 +12,4 @@ ignore/
 *.tfrecords
 *log
 ckpt*/
-
+*_pb2.py

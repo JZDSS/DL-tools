@@ -1,14 +1,14 @@
 import tensorflow as tf
 from tensorflow.contrib import layers
 from tensorflow.contrib.framework import arg_scope
-from nets import net
+from basenets import net
 import numpy as np
 
 
 class AlexNet(net.Net):
 
-    def __init__(self, image, name='AlexNet', npy_path=None):
-        super(AlexNet, self).__init__(name=name)
+    def __init__(self, image, name='AlexNet', npy_path=None, *args, **kwargs):
+        super(AlexNet, self).__init__(name=name, *args, **kwargs)
         self.inputs['image'] = image
         self.npy_path = npy_path
         self.build(self.inputs['image'])
