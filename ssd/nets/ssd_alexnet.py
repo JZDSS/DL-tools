@@ -12,7 +12,7 @@ class SSD_AlexNet(alexnet.AlexNet):
                  image,
                  num_classes,
                  ground_truth,
-                 anchor_config=None,
+                 anchor_config,
                  name='SSD_AlexNet',
                  npy_path=None,
                  weight_decay=0.0004):
@@ -22,7 +22,8 @@ class SSD_AlexNet(alexnet.AlexNet):
         self.weight_decay = weight_decay
         self.src = anchor_config['src']
         self.aspect_ratios = anchor_config['aspect_ratios']
-        self.num_anchors = [len(ratio) + 2 for ratio in self.aspect_ratios]
+        self.extra_anchor = anchor_config['extra_anchor']
+        self.num_anchors = [len(ratio) + int(extra) for ratio, extra in zip(self.aspect_ratios, self.extra_anchor)]
         self.ext_anchors = anchor_config['extra_scales']
         self.base_net()
         self.extra_net()

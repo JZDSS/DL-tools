@@ -2,10 +2,14 @@ package ssd.protos;
 
 import "ssd/protos/image.proto";
 import "ssd/protos/anchor_list.proto";
+import "ssd/protos/train.proto";
 
 message Model {
-    required ImageConfig image = 1;
-    required AnchorList anchor_list = 2;
-    required string name = 3;
-    required string type = 4 [default="ALEX"];
+    required string name = 1;
+    required string type = 2 [default="ALEX"];
+    required int32 num_classes = 3;
+
+    required ImageConfig image = 4;
+    required AnchorList anchor_list = 5;
+    required Train train = 6;
 }

@@ -1,4 +1,4 @@
-from ssd.anchor import *
+from ssd.config import *
 import os
 import cv2
 import numpy as np
