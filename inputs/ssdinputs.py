@@ -1,12 +1,14 @@
 import tensorflow as tf
 import numpy as np
+from inputs import tfrecordinputs
 
 # np.set_printoptions(threshold=np.inf)
 
 
-class SSDInput(object):
+class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
     def __init__(self, config):
+        super(SSDInputs, self).__init__()
         image_config = config['image']
         anchor_config = config['anchor']
         self.anchor_scales = anchor_config['scales']
@@ -310,7 +312,7 @@ def main():
     from ssd.configure import configure
     conf = configure('/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssdd.config')
     conf = conf.get_config()
-    ssdinput = SSDInput(conf['image'], conf['anchor'])
+    ssdinput = SSDInputs(conf['image'], conf['anchor'])
     with tf.device('/cpu:0'):
         images, locations, labels = ssdinput.input_pipeline(
             tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 10, read_threads=1)

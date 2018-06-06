@@ -1,10 +1,12 @@
-from ssd.configure import Configure
 import os
+
 import cv2
 import numpy as np
-from ssd import ssd_input
-from ssd.nets import ssdalexnet
 import tensorflow as tf
+
+from inputs import ssdinputs
+from ssd.configure import Configure
+from ssd.nets import ssdalexnet
 
 config = Configure().get_config()
 anchor_config = config['anchor']
@@ -51,7 +53,7 @@ for i, size in enumerate(feature_map_size):
     anchors.append(np.stack([d_cx, d_cy, d_w, d_h], -1))
 log_dir = '../log/ssd'
 ckpt_dir = '../ckpt/ssd'
-images, groundtruth = ssd_input.SSDInput(config).input_pipeline(
+images, groundtruth = ssdinputs.SSDInputs(config).input_pipeline(
     tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 1, read_threads=1)
 
 # tf.summary.histogram('location', locations)

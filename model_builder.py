@@ -1,7 +1,8 @@
 import tensorflow as tf
+
 from basenets import *
 from ssd.nets import *
-from ssd.ssd_input import SSDInput
+
 
 class ModelBuilder(object):
 
