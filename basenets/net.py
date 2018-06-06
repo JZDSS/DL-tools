@@ -1,5 +1,5 @@
 import tensorflow as tf
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 import logging
 import six
 
@@ -13,16 +13,15 @@ class Net(object):
         self.ground_truth = {}
         self.endpoints = {}
         self.outputs = {}
+        self.loss = None
 
     @abstractmethod
     def build(self, inputs):
         raise NotImplementedError
 
+    @abstractmethod
     def get_update_ops(self):
         raise NotImplementedError
-
-    def _checkout_loss(self):
-        pass
 
     @abstractmethod
     def loss(self):
@@ -31,4 +30,5 @@ class Net(object):
                                                               labels=self.ground_truth['labels'])
         loss = tf.reduce_mean(loss)
         tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+        self.loss = loss
         return loss

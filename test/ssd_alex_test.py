@@ -1,10 +1,18 @@
-from ssd.config import *
+from ssd.configure import Configure
 import os
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 from ssd import ssd_input
-from ssd.nets import ssd_alexnet
+from ssd.nets import ssdalexnet
+import tensorflow as tf
+
+config = Configure().get_config()
+anchor_config = config['anchor']
+feature_map_size = anchor_config['feature_map_size']
+anchor_scales = anchor_config['scales']
+ext_anchor_scales = anchor_config['extra_scales']
+aspect_ratios = anchor_config['aspect_ratios']
+
 anchors = []
 for i, size in enumerate(feature_map_size):
     # d for default boxes(anchors)
@@ -43,11 +51,12 @@ for i, size in enumerate(feature_map_size):
     anchors.append(np.stack([d_cx, d_cy, d_w, d_h], -1))
 log_dir = '../log/ssd'
 ckpt_dir = '../ckpt/ssd'
-images, locations, labels = ssd_input.input_pipeline(
-    tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 10, read_threads=1)
+images, groundtruth = ssd_input.SSDInput(config).input_pipeline(
+    tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 1, read_threads=1)
+
 # tf.summary.histogram('location', locations)
 xxx = tf.placeholder(dtype=tf.float32, shape=(None, 300, 300, 3))
-net = ssd_alexnet.SSD_AlexNet(xxx, 3, {'locations':locations, 'labels':labels})
+net = ssdalexnet.SSDAlexNet(xxx, 3, groundtruth, anchor_config=anchor_config)
 saver = tf.train.Saver(name="saver")
 with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())
@@ -61,9 +70,9 @@ with tf.Session() as sess:
     # image = image / 128.0
     while True:
         im = sess.run(images)
-        locs = sess.run(net.location, feed_dict={xxx: im})
-        prob = sess.run([tf.nn.softmax(c, axis=-1) for c in net.classification], feed_dict={xxx: im})
-        labs = sess.run([tf.argmax(c, axis=-1) for c in net.classification], feed_dict={xxx: im})
+        locs = sess.run(net.outputs['location'], feed_dict={xxx: im})
+        prob = sess.run([tf.nn.softmax(c, axis=-1) for c in net.outputs['classification']], feed_dict={xxx: im})
+        labs = sess.run([tf.argmax(c, axis=-1) for c in net.outputs['classification']], feed_dict={xxx: im})
         # print(locs[0])
 
         im = (im[0, :, :, :]*128+mean).astype(np.uint8)

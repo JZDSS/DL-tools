@@ -62,6 +62,9 @@ class AlexNet(net.Net):
     def loss(self):
         pass
 
+    def get_update_ops(self):
+        return []
+
     def setup(self):
         """Define ops that load pre-trained vgg16 net's weights and biases and add them to tf.GraphKeys.INIT_OP
         collection.
@@ -128,17 +131,17 @@ class AlexNet(net.Net):
 if __name__ == '__main__':
 
     x = tf.placeholder(shape=[None, 227, 227, 3], dtype=tf.float32)
-    net = AlexNet(x, './alex.npy')
+    net = AlexNet(x, npy_path='../npy/alexnet.npy')
     pred = net.outputs['logits']
 
     init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
 
     import cv2
-    img = cv2.imread('/home/yqi/Pictures/dog.jpg')
+    img = cv2.imread('../images/dog.jpg')
     img = cv2.resize(img, (227, 227))
     img = img
     img = np.expand_dims(img, 0)
     with tf.Session() as sess:
         sess.run(init_ops)
-        print(sess.run(tf.argmax(pred, 1), feed_dict={x: img}))
+        print(sess.run(tf.argmax(pred, 0), feed_dict={x: img}))
 
