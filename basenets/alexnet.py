@@ -7,8 +7,8 @@ import numpy as np
 
 class AlexNet(net.Net):
 
-    def __init__(self, image, name='AlexNet', npy_path=None, *args, **kwargs):
-        super(AlexNet, self).__init__(name=name, *args, **kwargs)
+    def __init__(self, image, name='AlexNet', npy_path=None, weight_decay=0.0004, **kwargs):
+        super(AlexNet, self).__init__(weight_decay=weight_decay, name=name, **kwargs)
         self.inputs['image'] = image
         self.npy_path = npy_path
         self.build(self.inputs['image'])
@@ -22,8 +22,8 @@ class AlexNet(net.Net):
         endpoints = self.endpoints
         y = image
         with arg_scope([layers.conv2d], activation_fn=tf.nn.relu,
-                       weights_regularizer=layers.l2_regularizer(0.0001),
-                       biases_regularizer=layers.l2_regularizer(0.0001)):
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
+                       biases_regularizer=layers.l2_regularizer(self.weight_decay)):
             y = layers.conv2d(y, 96, [11, 11], 4, 'VALID', scope='conv1')
             endpoints['conv1'] = y
             y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
@@ -57,9 +57,9 @@ class AlexNet(net.Net):
             endpoints['fc7'] = y
             y = layers.conv2d(y, 1000, [1, 1], 1, 'VALID', scope='fc8', activation_fn=None)
             endpoints['fc8'] = y
-            self.logits = tf.squeeze(y)
+            self.outputs['logits'] = tf.squeeze(y)
 
-    def loss(self, logits, labels, *args, **kwargs):
+    def loss(self):
         pass
 
     def setup(self):
@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     x = tf.placeholder(shape=[None, 227, 227, 3], dtype=tf.float32)
     net = AlexNet(x, './alex.npy')
-    pred = net.logits
+    pred = net.outputs['logits']
 
     init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
 

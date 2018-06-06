@@ -4,9 +4,9 @@ import numpy as np
 
 from basenets import alexnet
 from basenets import utils
-# from ssd.config import *
+from ssd.nets import ssdbase
 
-class SSD_AlexNet(alexnet.AlexNet):
+class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
 
     def __init__(self,
                  image,
@@ -15,11 +15,12 @@ class SSD_AlexNet(alexnet.AlexNet):
                  anchor_config,
                  name='SSD_AlexNet',
                  npy_path=None,
-                 weight_decay=0.0004):
-        super(SSD_AlexNet, self).__init__(image, name, npy_path)
+                 weight_decay=0.0004,
+                 **kwargs):
+        super(SSDAlexNet, self).__init__(image, name, npy_path, weight_decay=weight_decay,
+                                         **kwargs)
         self.ground_truth = ground_truth
         self.num_classes = num_classes
-        self.weight_decay = weight_decay
         self.src = anchor_config['src']
         self.aspect_ratios = anchor_config['aspect_ratios']
         self.extra_anchor = anchor_config['extra_anchor']
@@ -41,13 +42,69 @@ class SSD_AlexNet(alexnet.AlexNet):
         endpoints = self.endpoints
         y = endpoints['conv5']
         with tf.contrib.framework.arg_scope([layers.conv2d],
-                       weights_regularizer=layers.l2_regularizer(0.0001),
-                       biases_regularizer=layers.l2_regularizer(0.0001)):
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
+                       biases_regularizer=layers.l2_regularizer(self.weight_decay)):
             with tf.variable_scope('rebuild'):
                 y = layers.conv2d(y, 1024, [3, 3], 1, 'SAME', rate=6, scope='fc6')
                 endpoints['fc6'] = y
                 y = layers.conv2d(y, 1024, [1, 1], 1, 'VALID', scope='fc7')
                 endpoints['fc7'] = y
+
+    def extra_net(self):
+        endpoints = self.endpoints
+        with tf.contrib.framework.arg_scope([layers.conv2d],
+                                            weights_regularizer=layers.l2_regularizer(self.weight_decay),
+                                            biases_regularizer=layers.l2_regularizer(self.weight_decay)):
+            y = endpoints['fc7']
+            y = layers.conv2d(y, 256, [1, 1], 1, 'SAME', scope='conv8_1')
+            endpoints['conv8_1'] = y
+            y = layers.conv2d(y, 512, [3, 3], 2, 'SAME', scope='conv8_2')
+            endpoints['conv8_2'] = y
+            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv9_1')
+            endpoints['conv9_1'] = y
+            y = layers.conv2d(y, 256, [3, 3], 2, 'SAME', scope='conv9_2')
+            endpoints['conv9_2'] = y
+            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv10_1')
+            endpoints['conv10_1'] = y
+            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv10_2')
+            endpoints['conv10_2'] = y
+            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv11_1')
+            endpoints['conv11_1'] = y
+            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv11_2')
+            endpoints['conv11_2'] = y
+
+    def predict(self):
+        feature_maps = [self.endpoints[f] for f in self.src]
+        location_list = []
+        classification_list = []
+        with tf.contrib.framework.arg_scope([layers.conv2d],
+                                            weights_regularizer=layers.l2_regularizer(self.weight_decay),
+                                            biases_regularizer=layers.l2_regularizer(self.weight_decay)):
+            for i, feature_map in enumerate(feature_maps):
+                num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
+                prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
+
+                locations, classifications = tf.split(prediction,
+                                                      [self.num_anchors[i] * 4,
+                                                       self.num_anchors[i] * (self.num_classes + 1)],
+                                                      -1)
+                shape = locations.get_shape()
+                locations = tf.reshape(locations, [-1,
+                                                   shape[1],
+                                                   shape[2],
+                                                   self.num_anchors[i],
+                                                   4])
+                shape = classifications.get_shape()
+                classifications = tf.reshape(classifications,
+                                             [-1,
+                                              shape[1],
+                                              shape[2],
+                                              self.num_anchors[i],
+                                              (self.num_classes + 1)])
+                location_list.append(locations)
+                classification_list.append(classifications)
+        self.outputs['location'] = location_list
+        self.outputs['classification'] = classification_list
 
     def ssd_setup(self):
         weight_dict = np.load(self.npy_path, encoding="latin1").item()
@@ -77,67 +134,15 @@ class SSD_AlexNet(alexnet.AlexNet):
             tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
             tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
 
-    def extra_net(self):
-        endpoints = self.endpoints
-        with tf.contrib.framework.arg_scope([layers.conv2d],
-                                            weights_regularizer=layers.l2_regularizer(0.0001),
-                                            biases_regularizer=layers.l2_regularizer(0.0001)):
-            y = endpoints['fc7']
-            y = layers.conv2d(y, 256, [1, 1], 1, 'SAME', scope='conv8_1')
-            endpoints['conv8_1'] = y
-            y = layers.conv2d(y, 512, [3, 3], 2, 'SAME', scope='conv8_2')
-            endpoints['conv8_2'] = y
-            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv9_1')
-            endpoints['conv9_1'] = y
-            y = layers.conv2d(y, 256, [3, 3], 2, 'SAME', scope='conv9_2')
-            endpoints['conv9_2'] = y
-            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv10_1')
-            endpoints['conv10_1'] = y
-            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv10_2')
-            endpoints['conv10_2'] = y
-            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv11_1')
-            endpoints['conv11_1'] = y
-            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv11_2')
-            endpoints['conv11_2'] = y
-
-    def predict(self):
-        feature_maps = [self.endpoints[f] for f in self.src]
-        self.location = []
-        self.classification = []
-        with tf.contrib.framework.arg_scope([layers.conv2d],
-                                            weights_regularizer=layers.l2_regularizer(0.0001),
-                                            biases_regularizer=layers.l2_regularizer(0.0001)):
-            for i, feature_map in enumerate(feature_maps):
-                num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
-                prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
-
-                locations, classifications = tf.split(prediction,
-                                                      [self.num_anchors[i] * 4,
-                                                       self.num_anchors[i] * (self.num_classes + 1)],
-                                                      -1)
-                shape = locations.get_shape()
-                locations = tf.reshape(locations, [-1,
-                                                   shape[1],
-                                                   shape[2],
-                                                   self.num_anchors[i],
-                                                   4])
-                shape = classifications.get_shape()
-                classifications = tf.reshape(classifications,
-                                             [-1,
-                                              shape[1],
-                                              shape[2],
-                                              self.num_anchors[i],
-                                              (self.num_classes + 1)])
-                self.location.append(locations)
-                self.classification.append(classifications)
-
-    def get_loss(self):
+    def loss(self):
+        location = self.outputs['location']
+        classification = self.outputs['classification']
         cls_loss = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-                for (logits, labels) in zip(self.classification, self.ground_truth['labels'])]
+                for (logits, labels) in zip(classification, self.ground_truth['labels'])]
         cls_loss = tf.concat([layers.flatten(t) for t in cls_loss], axis=-1)
 
         loc_loss = [tf.reduce_sum(tf.losses.huber_loss(target, loc, reduction='none'), axis=-1)
-                    for (target, loc) in zip(self.ground_truth['locations'], self.location)]
+                    for (target, loc) in zip(self.ground_truth['locations'], location)]
         loc_loss = tf.concat([layers.flatten(t) for t in loc_loss], axis=-1)
 
         flattened_label = tf.concat([layers.flatten(t) for t in self.ground_truth['labels']], axis=-1)
@@ -211,7 +216,7 @@ if __name__ == '__main__':
         tf.train.match_filenames_once(os.path.join('../../ssd', '*.tfrecords')), 8, read_threads=1)
     tf.summary.image('image', images, 1)
     # tf.summary.histogram('location', locations)
-    net = SSD_AlexNet(images, 3, {'locations':locations, 'labels':labels}, npy_path='../../npy/alexnet.npy')
+    net = SSDAlexNet(images, 3, {'locations':locations, 'labels':labels}, npy_path='../../npy/alexnet.npy')
     loss = net.get_loss()
 
     optimizer = tf.train.AdamOptimizer(0.001)

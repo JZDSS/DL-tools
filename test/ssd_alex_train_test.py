@@ -14,7 +14,7 @@ def main(_):
     builder = ModelBuilder(config, fake=False)
     builder(input_class=SSDInput, anchor_config=config['anchor'])
     net = builder.model
-    loss = net.get_loss()
+    loss = net.loss()
 
     optimizer = tf.train.AdamOptimizer(0.001)
     train_op = optimizer.minimize(loss)
