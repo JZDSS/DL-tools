@@ -1,5 +1,5 @@
 from ssd.nets import ssdalexnet
 
-__all__ = ['SSD_AlexNet']
+__all__ = ['SSDAlexNet']
 
 SSDAlexNet = ssdalexnet.SSDAlexNet

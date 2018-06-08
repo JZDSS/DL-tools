@@ -9,7 +9,7 @@ from ssd.nets import ssdbase
 class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
 
     def __init__(self,
-                 image,
+                 inputs,
                  num_classes,
                  ground_truth,
                  anchor_config,
@@ -17,7 +17,7 @@ class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
                  npy_path=None,
                  weight_decay=0.0004,
                  **kwargs):
-        super(SSDAlexNet, self).__init__(image, name, npy_path, weight_decay=weight_decay,
+        super(SSDAlexNet, self).__init__(inputs, name, npy_path, weight_decay=weight_decay,
                                          **kwargs)
         self.ground_truth = ground_truth
         self.num_classes = num_classes
@@ -134,7 +134,7 @@ class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
             tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
             tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
 
-    def loss(self):
+    def calc_loss(self):
         location = self.outputs['location']
         classification = self.outputs['classification']
         cls_loss = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)

@@ -1,7 +1,7 @@
 import tensorflow as tf
 import os
 from ssd import configure
-from ssd.ssd_input import SSDInput
+from inputs.ssdinputs import SSDInputs
 from model_builder import ModelBuilder
 import time
 
@@ -12,9 +12,9 @@ def main(_):
     log_dir = config['train']['log_dir']
     ckpt_dir = config['train']['ckpt_dir']
     builder = ModelBuilder(config, fake=False)
-    builder(input_class=SSDInput, anchor_config=config['anchor'])
+    builder(input_class=SSDInputs)
     net = builder.model
-    loss = net.loss()
+    loss = net.calc_loss()
 
     optimizer = tf.train.AdamOptimizer(0.001)
     train_op = optimizer.minimize(loss)

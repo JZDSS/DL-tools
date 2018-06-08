@@ -7,8 +7,8 @@ from inputs import tfrecordinputs
 
 class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
-    def __init__(self, config):
-        super(SSDInputs, self).__init__()
+    def __init__(self, config=None, fake=False, **kwargs):
+        super(SSDInputs, self).__init__(config['train']['batch_size'], fake, **kwargs)
         image_config = config['image']
         anchor_config = config['anchor']
         self.anchor_scales = anchor_config['scales']
@@ -16,6 +16,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         self.ext_anchor_scales = anchor_config['extra_scales']
         self.feature_map_size = anchor_config['feature_map_size']
         self.size = (image_config['height'], image_config['width'])
+        self.channels = image_config['channels']
         self.extra_anchor = anchor_config['extra_anchor']
 
     def _random_horizontally_flip_with_bbox(self, image, bboxes, seed=None):
@@ -242,10 +243,8 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
         return locations_all, labels_all
 
-    def _read_from_tfrecord(self, tfrecord_file_queue):
-        reader = tf.TFRecordReader()
-        _, tfrecord_serialized = reader.read(tfrecord_file_queue)
-        tfrecord_features = tf.parse_single_example(tfrecord_serialized,
+    def _parser(self, record):
+        tfrecord_features = tf.parse_single_example(record,
                                                     features={
                                                         'image_string': tf.FixedLenFeature([], dtype=tf.string),
                                                         'labels': tf.VarLenFeature(dtype=tf.int64),
@@ -275,161 +274,26 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
                                     num_boxes, threshold=0.5)
         mean = tf.constant([123, 117, 104], dtype=image.dtype)
         mean = tf.reshape(mean, [1, 1, 3])
-        image = image - mean
+        image = image - 128
         image = image / 128.0
 
 
         return [image] + locations + labels
 
-    def input_pipeline(self, filenames, batch_size, read_threads, num_epochs=None):
-        filename_queue = tf.train.string_input_producer(
-            filenames, num_epochs=num_epochs, shuffle=True)
-        example_list = [self._read_from_tfrecord(filename_queue)
-                        for _ in range(read_threads)]
-
-        min_after_dequeue = 1000
-        capacity = min_after_dequeue + 3 * batch_size
-
-        e = tf.train.shuffle_batch_join(example_list, batch_size=batch_size,
-                                        capacity=capacity, min_after_dequeue=min_after_dequeue)
-        # e = tf.train.batch_join(example_list, batch_size=batch_size,
-        #                         capacity=capacity
-        #                         )
+    def _post_process(self, iterator):
+        if iterator is None and self.fake:
+            net_inputs = {'images': tf.zeros(dtype=tf.float32, shape=(1, self.size[0], self.size[1], self.channels))}
+            ground_truth = None
+            return net_inputs, ground_truth
+        e = iterator.get_next()
+        for tensor in e:
+            a = [8]+tensor.get_shape().as_list()[1:]
+            tensor.set_shape(a)
+        [tensor.set_shape([self.batch_size] + tensor.get_shape().as_list()[1:]) for tensor in e]
         images = e[0]
-        locations = e[1:len(e) // 2 + 1]
-        labels = e[len(e) // 2 + 1:]
+        locations = list(e[1:len(e) // 2 + 1])
+        labels = list(e[len(e) // 2 + 1:])
+        net_inputs = {'images': images}
         ground_truth = {'locations': locations, 'labels': labels}
-        return images, ground_truth
+        return net_inputs, ground_truth
 
-
-
-
-
-
-def main():
-    import os
-    import cv2
-    from ssd.configure import configure
-    conf = configure('/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssdd.config')
-    conf = conf.get_config()
-    ssdinput = SSDInputs(conf['image'], conf['anchor'])
-    with tf.device('/cpu:0'):
-        images, locations, labels = ssdinput.input_pipeline(
-            tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 10, read_threads=1)
-
-    with tf.Session() as sess:
-        train_writer = tf.summary.FileWriter('../ssd/testlog', sess.graph)
-        train_writer.flush()
-        sess.run(tf.local_variables_initializer())
-        sess.run(tf.global_variables_initializer())
-        sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord)
-        s = sess.run(locations)
-        # for i in range(100):
-        #     s = sess.run(images)
-        #     s = np.squeeze(s).astype(np.uint8)
-        #     print(s)
-        #     cv2.imshow("", s)
-        #     cv2.waitKey(0)
-        #     # train_writer.add_summary(s, i)
-
-        coord.request_stop()
-        coord.join(threads)
-        train_writer.close()
-
-
-
-
-
-
-
-# # localization decoding codes
-    # import os
-    # import cv2
-    # import numpy as np
-    # import matplotlib.pyplot as plt
-    #
-    # anchors = []
-    # for i, size in enumerate(feature_map_size):
-    #     # d for default boxes(anchors)
-    #     # x and y coordinate of centers of every cell, normalized to [0, 1]
-    #     d_cy, d_cx = np.mgrid[0:size[0], 0:size[1]].astype(np.float32)
-    #     d_cx = (d_cx + 0.5) / size[1]
-    #     d_cy = (d_cy + 0.5) / size[0]
-    #     d_cx = np.expand_dims(d_cx, axis=-1)
-    #     d_cy = np.expand_dims(d_cy, axis=-1)
-    #
-    #     # calculate width and heights
-    #     d_w = []
-    #     d_h = []
-    #     scale = anchor_scales[i]
-    #     # two aspect ratio 1 anchor scales
-    #     d_w.append(ext_anchor_scales[i])
-    #     d_w.append(scale)
-    #     d_h.append(ext_anchor_scales[i])
-    #     d_h.append(scale)
-    #     # other anchor scales
-    #     for ratio in aspect_ratios[i]:
-    #         d_w.append(scale * np.sqrt(ratio))
-    #         d_h.append(scale / np.sqrt(ratio))
-    #     d_w = np.array(d_w, dtype=np.float32)
-    #     d_h = np.array(d_h, dtype=np.float32)
-    #
-    #     d_ymin = d_cy - d_h / 2
-    #     d_ymax = d_cy + d_h / 2
-    #     d_xmin = d_cx - d_w / 2
-    #     d_xmax = d_cx + d_w / 2
-    #
-    #     d_h = d_ymax - d_ymin
-    #     d_w = d_xmax - d_xmin
-    #     d_cx = (d_xmax + d_xmin) / 2
-    #     d_cy = (d_ymax + d_ymin) / 2
-    #     anchors.append(np.stack([d_cx, d_cy, d_w, d_h], -1))
-    # i_and_l = input_pipeline(
-    #     tf.train.match_filenames_once(os.path.join('ssd', '*.tfrecords')), 32, read_threads=1)
-    # images = i_and_l[0]
-    # localizations = i_and_l[1:len(i_and_l)//2 + 1]
-    # labels = i_and_l[len(i_and_l)//2 + 1:]
-    # with tf.Session() as sess:
-    #     sess.run(tf.local_variables_initializer())
-    #     coord = tf.train.Coordinator()
-    #     threads = tf.train.start_queue_runners(coord=coord)
-    #     while True:
-    #         im, locs, labs = sess.run([images, localizations, labels])
-    #         print(locs[0])
-    #         im = im[0, :, :, :].astype(np.uint8)
-    #         # plt.imshow(im)
-    #         # plt.show()
-    #         for n_map, lab in enumerate(labs):
-    #             lab = lab[0, :, :, :]
-    #             for c in range(lab.shape[-1]):
-    #                 labb = lab[:,:,c]
-    #                 for y in range(labb.shape[0]):
-    #                     for x in range(labb.shape[1]):
-    #                         if labb[y, x] != 0:
-    #
-    #                             bbox = locs[n_map][0, y, x, c,:]  #[cx, cy, w, h]
-    #                             print(bbox)
-    #                             d_cx = anchors[n_map][y, x, c, 0]
-    #                             d_cy = anchors[n_map][y, x, c, 1]
-    #                             d_w = anchors[n_map][y, x, c, 2]
-    #                             d_h = anchors[n_map][y, x, c, 3]
-    #                             bbox[0] = bbox[0] * d_w + d_cx
-    #                             bbox[1] = bbox[1] * d_h + d_cy
-    #                             bbox[2] = np.exp(bbox[2]) * d_w
-    #                             bbox[3] = np.exp(bbox[3]) * d_h
-    #                             minx = int((bbox[0] - bbox[2]/2)*300)
-    #                             maxx = int((bbox[0] + bbox[2]/2)*300)
-    #                             miny = int((bbox[1] - bbox[3]/2)*300)
-    #                             maxy = int((bbox[1] + bbox[3]/2)*300)
-    #                             cv2.rectangle(im, (minx, miny), (maxx, maxy), (0,0,255), 1)
-    #
-    #         plt.imshow(im)
-    #         plt.show()
-    #     coord.request_stop()
-    #     coord.join(threads)
-
-
-if __name__ == '__main__':
-    main()

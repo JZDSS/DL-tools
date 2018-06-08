@@ -18,48 +18,48 @@ class AlexNet(net.Net):
     def set_npy_path(self, path):
         self.npy_path = path
 
-    def build(self, image):
+    def build(self, inputs):
         endpoints = self.endpoints
-        y = image
+        y = inputs['images']
         with arg_scope([layers.conv2d], activation_fn=tf.nn.relu,
                        weights_regularizer=layers.l2_regularizer(self.weight_decay),
                        biases_regularizer=layers.l2_regularizer(self.weight_decay)):
-            y = layers.conv2d(y, 96, [11, 11], 4, 'VALID', scope='conv1')
+            y = layers.conv2d(y, 96, (11, 11), 4, 'VALID', scope='conv1')
             endpoints['conv1'] = y
             y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
-            y = layers.max_pool2d(y, [3, 3], 2, 'VALID', scope='pool1')
+            y = layers.max_pool2d(y, (3, 3), 2, 'VALID', scope='pool1')
             y1, y2 = tf.split(y, 2, 3)
-            y1 = layers.conv2d(y1, 128, [5, 5], 1, 'SAME', scope='conv2_1')
-            y2 = layers.conv2d(y2, 128, [5, 5], 1, 'SAME', scope='conv2_2')
+            y1 = layers.conv2d(y1, 128, (5, 5), 1, 'SAME', scope='conv2_1')
+            y2 = layers.conv2d(y2, 128, (5, 5), 1, 'SAME', scope='conv2_2')
             endpoints['conv2_1'] = y1
             endpoints['conv2_2'] = y2
-            y = tf.concat([y1, y2], 3)
+            y = tf.concat((y1, y2), 3)
             endpoints['conv2'] = y
             y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
-            y = layers.max_pool2d(y, [3, 3], 2, 'VALID', scope='pool2')
-            y = layers.conv2d(y, 384, [3, 3], 1, 'SAME', scope='conv3')
+            y = layers.max_pool2d(y, (3, 3), 2, 'VALID', scope='pool2')
+            y = layers.conv2d(y, 384, (3, 3), 1, 'SAME', scope='conv3')
             endpoints['conv3'] = y
             y1, y2 = tf.split(y, 2, 3)
-            y1 = layers.conv2d(y1, 192, [3, 3], 1, 'SAME', scope='conv4_1')
-            y2 = layers.conv2d(y2, 192, [3, 3], 1, 'SAME', scope='conv4_2')
+            y1 = layers.conv2d(y1, 192, (3, 3), 1, 'SAME', scope='conv4_1')
+            y2 = layers.conv2d(y2, 192, (3, 3), 1, 'SAME', scope='conv4_2')
             endpoints['conv4_1'] = y1
             endpoints['conv4_2'] = y2
-            y1 = layers.conv2d(y1, 128, [3, 3], 1, 'SAME', scope='conv5_1')
-            y2 = layers.conv2d(y2, 128, [3, 3], 1, 'SAME', scope='conv5_2')
+            y1 = layers.conv2d(y1, 128, (3, 3), 1, 'SAME', scope='conv5_1')
+            y2 = layers.conv2d(y2, 128, (3, 3), 1, 'SAME', scope='conv5_2')
             endpoints['conv5_1'] = y1
             endpoints['conv5_2'] = y2
             y = tf.concat([y1, y2], 3)
             endpoints['conv5'] = y
-            y = layers.max_pool2d(y, [3, 3], 2, 'VALID', scope='pool5')
-            y = layers.conv2d(y, 4096, [6, 6], 1, 'VALID', scope='fc6')
+            y = layers.max_pool2d(y, (3, 3), 2, 'VALID', scope='pool5')
+            y = layers.conv2d(y, 4096, (6, 6), 1, 'VALID', scope='fc6')
             endpoints['fc6'] = y
-            y = layers.conv2d(y, 4096, [1, 1], 1, 'VALID', scope='fc7')
+            y = layers.conv2d(y, 4096, (1, 1), 1, 'VALID', scope='fc7')
             endpoints['fc7'] = y
-            y = layers.conv2d(y, 1000, [1, 1], 1, 'VALID', scope='fc8', activation_fn=None)
+            y = layers.conv2d(y, 1000, (1, 1), 1, 'VALID', scope='fc8', activation_fn=None)
             endpoints['fc8'] = y
             self.outputs['logits'] = tf.squeeze(y)
 
-    def loss(self):
+    def calc_loss(self):
         pass
 
     def get_update_ops(self):

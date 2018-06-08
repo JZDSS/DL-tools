@@ -3,6 +3,7 @@ import numpy as np
 from ssd.protos import model_pb2
 from google.protobuf import text_format
 import model_builder
+from inputs.ssdinputs import SSDInputs
 
 
 class Configure(object):
@@ -31,6 +32,7 @@ class Configure(object):
         # boolean
         anchor_config['extra_anchor'] = [a.extra_anchor for a in anchor_list.anchor]
         anchor_config['src'] = src
+        anchor_config['feature_map_size'] = None
         return anchor_config
 
 
@@ -38,6 +40,7 @@ class Configure(object):
         image_config = {}
         image_config['height'] = image.height
         image_config['width'] = image.width
+        image_config['channels'] = image.channels
         image_config['min_jaccard_overlap'] = image.minimum_jaccard_overlap
         image_config['aspect_ratio_range'] = (image.min_aspect_ratio, image.max_aspect_ratio)
         image_config['area_range']  = (image.min_area, image.max_area)
@@ -80,7 +83,7 @@ class Configure(object):
                                               'image': image_config,
                                               'train': train_config,
                                               'anchor': anchor_config}, fake=True)
-        builder(anchor_config=anchor_config)
+        builder(input_class=SSDInputs)
 
         feature_map_size = [builder.model.endpoints[k].get_shape().as_list()[1:3] for k in anchor_config['src']]
         anchor_config['feature_map_size'] = feature_map_size

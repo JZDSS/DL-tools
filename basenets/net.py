@@ -24,7 +24,7 @@ class Net(object):
         raise NotImplementedError
 
     @abstractmethod
-    def loss(self):
+    def calc_loss(self):
         logging.warning('Using default loss function!')
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.outputs['logits'],
                                                               labels=self.ground_truth['labels'])

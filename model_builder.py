@@ -14,21 +14,21 @@ class ModelBuilder(object):
         self.fake = fake
 
     def __call__(self, *args, **kwargs):
-        if self.fake:
-            self.images = tf.placeholder(tf.float32, shape=(1, self.image_config['height'], self.image_config['width'], 3))
-            self.ground_truth = None
-        else:
-            pipeline = kwargs['input_class'](self.config)
-            filenames = tf.train.match_filenames_once(self.image_config['path'])
-            self.images, self.ground_truth = pipeline.input_pipeline(filenames, self.train_config['batch_size'], 1)
-            del kwargs['input_class']
+
+        input_class = kwargs['input_class']
+        pipeline = input_class(self.config, fake=self.fake)
+        filenames = self.image_config['path']
+        self.net_inputs, self.ground_truth = pipeline.input_pipeline(filenames, self.train_config['batch_size'],
+                                                                 len(filenames), 1)
+        del kwargs['input_class']
 
         type = self.model_config['type']
         if type == 'ALEX':
             self.model = AlexNet(args, **kwargs)
         elif type == 'SSD_ALEX':
-            self.model = SSD_AlexNet(self.images,
-                                     self.model_config['num_classes'],
-                                     self.ground_truth,
-                                     name=self.model_config['name'], **kwargs)
+            self.model = SSDAlexNet(self.net_inputs,
+                                    self.model_config['num_classes'],
+                                    self.ground_truth,
+                                    anchor_config=self.config['anchor'],
+                                    name=self.model_config['name'], **kwargs)
 
