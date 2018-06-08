@@ -32,7 +32,9 @@ def main(_):
             saver.restore(sess, dir)
         else:
             print('train from alexnet')
-            sess.run(tf.get_collection(tf.GraphKeys.INIT_OP))
+            init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
+            assert init_ops is not []
+            sess.run(init_ops)
         train_writer = tf.summary.FileWriter(log_dir, sess.graph)
         train_writer.flush()
 

@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
-from inputs import ssdinputs
+from inputs.ssdinputs import SSDInputs
 from ssd.configure import Configure
 from ssd.nets import ssdalexnet
 
@@ -53,12 +53,12 @@ for i, size in enumerate(feature_map_size):
     anchors.append(np.stack([d_cx, d_cy, d_w, d_h], -1))
 log_dir = '../log/ssd'
 ckpt_dir = '../ckpt/ssd'
-images, groundtruth = ssdinputs.SSDInputs(config).input_pipeline(
-    tf.train.match_filenames_once(os.path.join('../ssd', '*.tfrecords')), 1, read_threads=1)
-
+filenames = config['image']['path']
+pipeline = SSDInputs(config, fake=False)
+net_inputs, ground_truth = pipeline.input_pipeline(filenames, len(filenames), 1)
 # tf.summary.histogram('location', locations)
 xxx = tf.placeholder(dtype=tf.float32, shape=(None, 300, 300, 3))
-net = ssdalexnet.SSDAlexNet(xxx, 3, groundtruth, anchor_config=anchor_config)
+net = ssdalexnet.SSDAlexNet({'images': xxx}, 3, ground_truth, anchor_config=anchor_config)
 saver = tf.train.Saver(name="saver")
 with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())
@@ -71,7 +71,7 @@ with tf.Session() as sess:
 
     # image = image / 128.0
     while True:
-        im = sess.run(images)
+        im = sess.run(net_inputs['images'])
         locs = sess.run(net.outputs['location'], feed_dict={xxx: im})
         prob = sess.run([tf.nn.softmax(c, axis=-1) for c in net.outputs['classification']], feed_dict={xxx: im})
         labs = sess.run([tf.argmax(c, axis=-1) for c in net.outputs['classification']], feed_dict={xxx: im})
