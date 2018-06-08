@@ -15,7 +15,7 @@ class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
                  anchor_config,
                  name='SSD_AlexNet',
                  npy_path=None,
-                 weight_decay=0.0004,
+                 weight_decay=0.0001,
                  **kwargs):
         super(SSDAlexNet, self).__init__(inputs, name, npy_path, weight_decay=weight_decay,
                                          **kwargs)

@@ -274,7 +274,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
                                     num_boxes, threshold=0.5)
         mean = tf.constant([123, 117, 104], dtype=image.dtype)
         mean = tf.reshape(mean, [1, 1, 3])
-        image = image - 128
+        image = image - mean
         image = image / 128.0
 
 

@@ -8,8 +8,9 @@ message Model {
     required string name = 1;
     required string type = 2 [default="ALEX"];
     required int32 num_classes = 3;
+    optional string npy_path = 4; [default=""]
 
-    required ImageConfig image = 4;
-    required AnchorList anchor_list = 5;
-    required Train train = 6;
+    required ImageConfig image = 5;
+    required AnchorList anchor_list = 6;
+    required Train train = 7;
 }

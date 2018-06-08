@@ -53,6 +53,10 @@ class Configure(object):
         model_config['name'] = model.name
         model_config['type'] = model.type
         model_config['num_classes'] = model.num_classes
+        if model.npy_path is not None:
+            model_config['npy_path'] = model.npy_path
+        else:
+            model_config['npy_path'] = None
         return model_config
 
     def _get_train_config(self, train):

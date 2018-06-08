@@ -3,10 +3,10 @@ message ImageConfig {
     required int32 width = 2 [default=300];
     required int32 channels = 3 [default=3];
     required string path = 4;
-    optional float minimum_jaccard_overlap = 5 [default=0.7];
-    optional float min_aspect_ratio = 6 [default=0.5];
-    optional float max_aspect_ratio = 7 [default=2];
-    optional float min_area = 8 [default=0.1];
-    optional float max_area = 9 [default=1];
-    optional bool flip = 10 [default=true];
+    required float minimum_jaccard_overlap = 5 [default=0.7];
+    required float min_aspect_ratio = 6 [default=0.5];
+    required float max_aspect_ratio = 7 [default=2];
+    required float min_area = 8 [default=0.1];
+    required float max_area = 9 [default=1];
+    required bool flip = 10 [default=true];
 }

@@ -29,5 +29,6 @@ class ModelBuilder(object):
                                     self.model_config['num_classes'],
                                     self.ground_truth,
                                     anchor_config=self.config['anchor'],
-                                    name=self.model_config['name'], **kwargs)
+                                    name=self.model_config['name'],
+                                    npy_path=self.model_config['npy_path'] if not self.fake else None, **kwargs)
 
