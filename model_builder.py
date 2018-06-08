@@ -18,8 +18,7 @@ class ModelBuilder(object):
         input_class = kwargs['input_class']
         pipeline = input_class(self.config, fake=self.fake)
         filenames = self.image_config['path']
-        self.net_inputs, self.ground_truth = pipeline.input_pipeline(filenames, self.train_config['batch_size'],
-                                                                 len(filenames), 1)
+        self.net_inputs, self.ground_truth = pipeline.input_pipeline(filenames, len(filenames), 1)
         del kwargs['input_class']
 
         type = self.model_config['type']

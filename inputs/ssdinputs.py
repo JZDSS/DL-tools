@@ -286,9 +286,6 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
             ground_truth = None
             return net_inputs, ground_truth
         e = iterator.get_next()
-        for tensor in e:
-            a = [8]+tensor.get_shape().as_list()[1:]
-            tensor.set_shape(a)
         [tensor.set_shape([self.batch_size] + tensor.get_shape().as_list()[1:]) for tensor in e]
         images = e[0]
         locations = list(e[1:len(e) // 2 + 1])

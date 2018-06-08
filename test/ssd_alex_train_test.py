@@ -18,7 +18,7 @@ def main(_):
 
     optimizer = tf.train.AdamOptimizer(0.001)
     train_op = optimizer.minimize(loss)
-    saver = tf.train.Saver(name="saver", max_to_keep=10)
+    saver = tf.train.Saver(name="saver", max_to_keep=5)
     summ = tf.summary.merge_all()
     with tf.Session() as sess:
         sess.run(tf.local_variables_initializer())
