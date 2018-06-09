@@ -16,7 +16,7 @@ class Net(object):
         self.loss = None
 
     @abstractmethod
-    def build(self, inputs):
+    def build(self):
         raise NotImplementedError
 
     @abstractmethod

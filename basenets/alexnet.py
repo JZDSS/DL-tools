@@ -7,20 +7,20 @@ import numpy as np
 
 class AlexNet(net.Net):
 
-    def __init__(self, image, name='AlexNet', npy_path=None, weight_decay=0.0004, **kwargs):
+    def __init__(self, inputs, name='AlexNet', npy_path=None, weight_decay=0.0004, **kwargs):
         super(AlexNet, self).__init__(weight_decay=weight_decay, name=name, **kwargs)
-        self.inputs['image'] = image
+        self.inputs = inputs
         self.npy_path = npy_path
-        self.build(self.inputs['image'])
+        self.build()
         if self.npy_path:
             self.setup()
 
     def set_npy_path(self, path):
         self.npy_path = path
 
-    def build(self, inputs):
+    def build(self):
         endpoints = self.endpoints
-        y = inputs['images']
+        y = self.inputs['images']
         with arg_scope([layers.conv2d], activation_fn=tf.nn.relu,
                        weights_regularizer=layers.l2_regularizer(self.weight_decay),
                        biases_regularizer=layers.l2_regularizer(self.weight_decay)):
