@@ -56,10 +56,7 @@ def main(_):
                 i += 1
             except tf.errors.OutOfRangeError as e:
                 print(e)
-                saver.save(sess, os.path.join(ckpt_dir, 'ssd_model'), global_step=i)
-                summary = sess.run(summ)
-                train_writer.add_summary(summary, i)
-                train_writer.flush()
+                saver.save(sess, os.path.join(ckpt_dir, 'ssd_model'), global_step=i - 1)
                 break
 
         coord.request_stop()

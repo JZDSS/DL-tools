@@ -124,6 +124,83 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
             image = self._resize(image, size)
         return image, bboxes, labels, num_boxes
 
+    def decode(self, net_outputs):
+
+        locations = net_outputs['location']
+        logits = net_outputs['classification']
+
+        probs = [tf.nn.softmax(c, axis=-1) for c in logits]
+        labels = [tf.argmax(p, axis=-1) for p in probs]
+        probs = [tf.reduce_max(p, axis=-1) for p in probs]
+        masks = [tf.greater(l, 0) for l in labels]
+
+        x, y, w, h = list(zip(*[tf.unstack(loc, axis=-1) for loc in locations]))
+
+        # x = [tf.multiply(t, mm) for t, mm in zip(x, masks)]
+        # y = [tf.multiply(t, mm) for t, mm in zip(y, masks)]
+        # w = [tf.multiply(t, mm) for t, mm in zip(w, masks)]
+        # h = [tf.multiply(t, mm) for t, mm in zip(h, masks)]
+
+        # for every feature map
+        box_list = []
+        prob_list = []
+        for i, size in enumerate(self.feature_map_size):
+            # d for default boxes(anchors)
+            # x and y coordinate of centers of every cell, normalized to [0, 1]
+            d_cy, d_cx = np.mgrid[0:size[0], 0:size[1]].astype(np.float32)
+            d_cx = (d_cx + 0.5) / size[1]
+            d_cy = (d_cy + 0.5) / size[0]
+            d_cx = np.expand_dims(d_cx, axis=-1)
+            d_cy = np.expand_dims(d_cy, axis=-1)
+
+            # calculate width and heights
+            d_w = []
+            d_h = []
+            scale = self.anchor_scales[i]
+            # two aspect ratio 1 anchor scales
+            if self.extra_anchor[i]:
+                d_w.append(self.ext_anchor_scales[i])
+                d_h.append(self.ext_anchor_scales[i])
+            # other anchor scales
+            for ratio in self.aspect_ratios[i]:
+                d_w.append(scale * np.sqrt(ratio))
+                d_h.append(scale / np.sqrt(ratio))
+            d_w = np.array(d_w, dtype=np.float32)
+            d_h = np.array(d_h, dtype=np.float32)
+
+            # d_ymin = d_cy - d_h / 2
+            # d_ymax = d_cy + d_h / 2
+            # d_xmin = d_cx - d_w / 2
+            # d_xmax = d_cx + d_w / 2
+            # vol_anchors = (d_xmax - d_xmin) * (d_ymax - d_ymin)
+
+            g_cx = x[i]
+            g_cy = y[i]
+            g_w = w[i]
+            g_h = h[i]
+            mask = tf.contrib.layers.flatten(masks[i])
+            g_cx = tf.boolean_mask(tf.contrib.layers.flatten(g_cx * d_w + d_cx), mask)
+            g_cy = tf.boolean_mask(tf.contrib.layers.flatten(g_cy * d_h + d_cy), mask)
+            g_w = tf.boolean_mask(tf.contrib.layers.flatten(tf.exp(g_w) * d_w), mask)
+            g_h = tf.boolean_mask(tf.contrib.layers.flatten(tf.exp(g_h) * d_h), mask)
+
+            x_min = g_cx - g_w / 2
+            x_max = g_cx + g_w / 2
+            y_min = g_cy - g_h / 2
+            y_max = g_cy + g_h / 2
+
+            box = tf.stack([y_min, x_min, y_max, x_max], axis=-1)
+            prob = tf.boolean_mask(tf.contrib.layers.flatten(probs[i]), mask)
+            box_list.append(box)
+            prob_list.append(prob)
+
+        box = tf.concat(box_list, axis=0)
+        prob = tf.concat(prob_list, axis=0)
+        return box, prob
+
+
+
+
     def _bounding_boxes2ground_truth(self, bboxes, labels, anchor_scales, ext_anchor_scales,
                                     aspect_ratios, feature_map_size, num_boxes, threshold=0.5):
         """

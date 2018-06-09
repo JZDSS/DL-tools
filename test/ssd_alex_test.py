@@ -57,60 +57,29 @@ filenames = config['image']['path']
 pipeline = SSDInputs(config, fake=False)
 net_inputs, ground_truth = pipeline.input_pipeline(filenames, len(filenames), 1)
 # tf.summary.histogram('location', locations)
-xxx = tf.placeholder(dtype=tf.float32, shape=(None, 300, 300, 3))
-net = ssdalexnet.SSDAlexNet({'images': xxx}, 3, ground_truth, anchor_config=anchor_config)
+# xxx = tf.placeholder(dtype=tf.float32, shape=(config['train']['batch_size'], 300, 300, 3))
+net = ssdalexnet.SSDAlexNet(net_inputs, 3, ground_truth, anchor_config=anchor_config)
+
+box, prob = pipeline.decode(net.outputs)
+selected_indices = tf.image.non_max_suppression(box, prob, 10, 0.4)
+box = tf.gather(box, selected_indices)
+prob = tf.gather(prob, selected_indices)
+mean = np.array([123, 117, 104])
+mean = np.reshape(mean, [1, 1, 3])
+drawed = tf.image.draw_bounding_boxes((net_inputs['images']*128+mean)/255., tf.expand_dims(box, 0))
+
 saver = tf.train.Saver(name="saver")
 with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())
     dir = tf.train.latest_checkpoint(ckpt_dir)
     saver.restore(sess, dir)
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(coord=coord)
-    mean = np.array([123, 117, 104])
-    mean = np.reshape(mean, [1, 1, 3])
+
+
 
     # image = image / 128.0
     while True:
-        im = sess.run(net_inputs['images'])
-        locs = sess.run(net.outputs['location'], feed_dict={xxx: im})
-        prob = sess.run([tf.nn.softmax(c, axis=-1) for c in net.outputs['classification']], feed_dict={xxx: im})
-        labs = sess.run([tf.argmax(c, axis=-1) for c in net.outputs['classification']], feed_dict={xxx: im})
-        # print(locs[0])
-
-        im = (im[0, :, :, :]*128+mean).astype(np.uint8)
-        # plt.imshow(im)
-        # plt.show()
-        for n_map, lab in enumerate(labs):
-            lab = lab[0, :, :, :]
-            p = prob[n_map][0, :, :, :]
-            for c in range(lab.shape[-1]):
-                if c == 0:
-                    continue
-                labb = lab[:,:,c]
-                pp = p[:,:,c]
-                for y in range(labb.shape[0]):
-                    for x in range(labb.shape[1]):
-                        if labb[y, x] != 0 and pp[y, x, labb[y, x]] > 0.7:
-                            print(labb[y, x], pp[y, x, labb[y, x]])
-                            bbox = locs[n_map][0, y, x, c,:]  #[cx, cy, w, h]
-                            # print(bbox)
-                            d_cx = anchors[n_map][y, x, c, 0]
-                            d_cy = anchors[n_map][y, x, c, 1]
-                            d_w = anchors[n_map][y, x, c, 2]
-                            d_h = anchors[n_map][y, x, c, 3]
-                            bbox[0] = bbox[0] * d_w + d_cx
-                            bbox[1] = bbox[1] * d_h + d_cy
-                            bbox[2] = np.exp(bbox[2]) * d_w
-                            bbox[3] = np.exp(bbox[3]) * d_h
-                            minx = int((bbox[0] - bbox[2]/2)*300)
-                            maxx = int((bbox[0] + bbox[2]/2)*300)
-                            miny = int((bbox[1] - bbox[3]/2)*300)
-                            maxy = int((bbox[1] + bbox[3]/2)*300)
-                            cv2.rectangle(im, (minx, miny), (maxx, maxy), (0,0,255), 1)
-
-        # plt.imshow(im)
-        # plt.show()
-        cv2.imshow('', im)
+        # im = sess.run(net_inputs['images'])
+        result = (sess.run(drawed)*255).astype(np.uint8)[0,:]
+        cv2.imshow("", result)
         cv2.waitKey(0)
-    coord.request_stop()
-    coord.join(threads)
+
