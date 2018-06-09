@@ -5,7 +5,7 @@ import six
 @six.add_metaclass(ABCMeta)
 class Inputs(object):
     
-    def __init__(self, batch_size, fake, **kwargs):
+    def __init__(self, config, batch_size, fake, **kwargs):
         self.batch_size = batch_size
         self.fake = fake
     

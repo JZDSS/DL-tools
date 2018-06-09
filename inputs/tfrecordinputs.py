@@ -7,8 +7,8 @@ import tensorflow as tf
 @six.add_metaclass(ABCMeta)
 class TFRecordsInputs(Inputs):
 
-    def __init__(self, batch_size, fake=False, **kwargs):
-        super(TFRecordsInputs, self).__init__(batch_size, fake, **kwargs)
+    def __init__(self, config, batch_size, fake=False, **kwargs):
+        super(TFRecordsInputs, self).__init__(config, batch_size, fake, **kwargs)
 
     @abstractmethod
     def _parser(self, record):

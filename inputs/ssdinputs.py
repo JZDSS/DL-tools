@@ -7,8 +7,8 @@ from inputs import tfrecordinputs
 
 class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
-    def __init__(self, config=None, fake=False, **kwargs):
-        super(SSDInputs, self).__init__(config['train']['batch_size'], fake, **kwargs)
+    def __init__(self, config=None, batch_size=1, fake=False, **kwargs):
+        super(SSDInputs, self).__init__(None, batch_size, fake, **kwargs)
         image_config = config['image']
         anchor_config = config['anchor']
         self.anchor_scales = anchor_config['scales']
