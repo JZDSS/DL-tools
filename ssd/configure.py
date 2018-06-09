@@ -87,8 +87,8 @@ class Configure(object):
         builder = model_builder.ModelBuilder({'model': model_config,
                                               'image': image_config,
                                               'train': train_config,
-                                              'anchor': anchor_config}, fake=True)
-        builder(input_class=SSDInputs)
+                                              'anchor': anchor_config}, fake=True, input_class=SSDInputs)
+        # builder()
 
         feature_map_size = [builder.model.endpoints[k].get_shape().as_list()[1:3] for k in anchor_config['src']]
         anchor_config['feature_map_size'] = feature_map_size

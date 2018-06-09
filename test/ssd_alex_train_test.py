@@ -11,8 +11,7 @@ def main(_):
     config = config.get_config()
     log_dir = config['train']['log_dir']
     ckpt_dir = config['train']['ckpt_dir']
-    builder = ModelBuilder(config, fake=False)
-    builder(input_class=SSDInputs)
+    builder = ModelBuilder(config, fake=False, input_class=SSDInputs)
     net = builder.model
     loss = net.calc_loss()
 

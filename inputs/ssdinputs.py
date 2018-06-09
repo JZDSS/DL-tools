@@ -124,15 +124,24 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
             image = self._resize(image, size)
         return image, bboxes, labels, num_boxes
 
-    def decode(self, net_outputs):
+    def decode(self, net_outputs, num_classes):
 
         locations = net_outputs['location']
         logits = net_outputs['classification']
+        box_list = []
+        prob_list = []
+        for n in range(1, num_classes + 1):
+            box, prob = self.decode_class(locations, logits, n)
+            box_list.append(box)
+            prob_list.append(prob)
+        return box_list, prob_list
+
+    def decode_class(self, locations, logits, n):
 
         probs = [tf.nn.softmax(c, axis=-1) for c in logits]
         labels = [tf.argmax(p, axis=-1) for p in probs]
         probs = [tf.reduce_max(p, axis=-1) for p in probs]
-        masks = [tf.greater(l, 0) for l in labels]
+        masks = [tf.equal(l, n) for l in labels]
 
         x, y, w, h = list(zip(*[tf.unstack(loc, axis=-1) for loc in locations]))
 
@@ -196,6 +205,9 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
         box = tf.concat(box_list, axis=0)
         prob = tf.concat(prob_list, axis=0)
+        selected_indices = tf.image.non_max_suppression(box, prob, 10, 0.5)
+        box = tf.gather(box, selected_indices)
+        prob = tf.gather(prob, selected_indices)
         return box, prob
 
 
@@ -349,9 +361,15 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         locations, labels = self._bounding_boxes2ground_truth(bboxes, labels, self.anchor_scales,
                                     self.ext_anchor_scales, self.aspect_ratios, self.feature_map_size,
                                     num_boxes, threshold=0.5)
-        mean = tf.constant([123, 117, 104], dtype=image.dtype)
-        mean = tf.reshape(mean, [1, 1, 3])
-        image = image - mean
+
+        image = tf.image.random_brightness(image, max_delta=10)
+        image = tf.image.random_contrast(image, lower=0.9, upper=1.1)
+        image = tf.image.random_saturation(image, 0.9, 1.1)
+        image = tf.image.random_hue(image, 0.05)
+
+        # mean = tf.constant([123, 117, 104], dtype=image.dtype)
+        # mean = tf.reshape(mean, [1, 1, 3])
+        image = image - 128
         image = image / 128.0
 
 
