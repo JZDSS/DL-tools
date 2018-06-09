@@ -64,6 +64,7 @@ class Configure(object):
         train_config['batch_size'] = train.batch_size
         train_config['log_dir'] = train.log_dir
         train_config['ckpt_dir'] = train.ckpt_dir
+        train_config['num_epochs'] = train.num_epochs
         return train_config
 
     def get_config(self):
