@@ -1,0 +1,9 @@
+package ssd.protos;
+
+message Eval {
+    required string log_dir = 1;
+    required string ckpt_dir = 2;
+    required int32 batch_size = 3 [default=1];
+    optional int32 num_epochs = 4;
+
+}

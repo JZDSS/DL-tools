@@ -205,7 +205,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
         box = tf.concat(box_list, axis=0)
         prob = tf.concat(prob_list, axis=0)
-        selected_indices = tf.image.non_max_suppression(box, prob, 10, 0.5)
+        selected_indices = tf.image.non_max_suppression(box, prob, 10, 0.3)
         box = tf.gather(box, selected_indices)
         prob = tf.gather(prob, selected_indices)
         return box, prob

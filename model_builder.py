@@ -12,7 +12,8 @@ class ModelBuilder(object):
         self.mode = mode
         self.model_config = config['model']
         self.image_config = config['image']
-        self.train_config = config['train']
+        # self.train_config = config['train']
+        # self.eval_config = config['eval']
         self.fake = fake
         self.pipeline = None
         self.model = None
@@ -23,11 +24,10 @@ class ModelBuilder(object):
 
         # input_class = kwargs['input_class']
         self.pipeline = self.input_class(self.config,
-                               batch_size=self.train_config['batch_size'] if self.mode=='train' else 1,
-                               fake=self.fake)
+                               batch_size=self.config[self.mode]['batch_size'], fake=self.fake)
         filenames = self.image_config['path']
         self.net_inputs, self.ground_truth = self.pipeline.input_pipeline(filenames, len(filenames), 1,
-                                                                     self.train_config['num_epochs'])
+                                                                     self.config[self.mode]['num_epochs'])
         # del kwargs['input_class']
 
         type = self.model_config['type']
@@ -41,3 +41,5 @@ class ModelBuilder(object):
                                     name=self.model_config['name'],
                                     npy_path=self.model_config['npy_path'] if not self.fake else None, **kwargs)
 
+            self.ckpt_dir = self.config[self.mode]['ckpt_dir']
+            self.log_dir = self.config[self.mode]['log_dir']

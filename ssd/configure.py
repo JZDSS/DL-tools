@@ -67,6 +67,14 @@ class Configure(object):
         train_config['num_epochs'] = train.num_epochs
         return train_config
 
+    def _get_eval_config(self, eval):
+        eval_config = {}
+        eval_config['batch_size'] = eval.batch_size
+        eval_config['log_dir'] = eval.log_dir
+        eval_config['ckpt_dir'] = eval.ckpt_dir
+        eval_config['num_epochs'] = eval.num_epochs if eval.num_epochs != 0 else None
+        return eval_config
+
     def get_config(self):
         model = model_pb2.Model()
 
@@ -83,11 +91,13 @@ class Configure(object):
 
         train_config = self._get_train_config(model.train)
 
+        eval_config = self._get_eval_config(model.eval)
         # with tf.get_default_graph():
         builder = model_builder.ModelBuilder({'model': model_config,
                                               'image': image_config,
                                               'train': train_config,
-                                              'anchor': anchor_config}, fake=True, input_class=SSDInputs)
+                                              'anchor': anchor_config,
+                                              'eval': eval_config}, fake=True, input_class=SSDInputs)
         # builder()
 
         feature_map_size = [builder.model.endpoints[k].get_shape().as_list()[1:3] for k in anchor_config['src']]
@@ -99,5 +109,6 @@ class Configure(object):
         config['image'] = image_config
         config['anchor'] = anchor_config
         config['train'] = train_config
+        config['eval'] = eval_config
         return config
 
