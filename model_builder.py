@@ -11,7 +11,7 @@ class ModelBuilder(object):
         self.config = config
         self.mode = mode
         self.model_config = config['model']
-        self.image_config = config['image']
+        self.image_config = config[mode]['image']
         # self.train_config = config['train']
         # self.eval_config = config['eval']
         self.fake = fake

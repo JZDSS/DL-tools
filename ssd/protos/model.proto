@@ -1,6 +1,7 @@
+syntax = "proto2";
+
 package ssd.protos;
 
-import "ssd/protos/image.proto";
 import "ssd/protos/anchor_list.proto";
 import "ssd/protos/train.proto";
 import "ssd/protos/eval.proto";
@@ -11,8 +12,7 @@ message Model {
     required int32 num_classes = 3;
     optional string npy_path = 4 [default=""];
 
-    required ImageConfig image = 5;
-    required AnchorList anchor_list = 6;
-    required Train train = 7;
-    required Eval eval = 8;
+    required AnchorList anchor_list = 5;
+    required Train train = 6;
+    required Eval eval = 7;
 }

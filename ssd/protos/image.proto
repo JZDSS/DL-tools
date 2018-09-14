@@ -1,3 +1,5 @@
+syntax = "proto2";
+
 message ImageConfig {
     required int32 height = 1 [default=300];
     required int32 width = 2 [default=300];

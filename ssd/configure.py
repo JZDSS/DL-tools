@@ -65,6 +65,7 @@ class Configure(object):
         train_config['log_dir'] = train.log_dir
         train_config['ckpt_dir'] = train.ckpt_dir
         train_config['num_epochs'] = train.num_epochs
+        train_config['image'] = self._get_image_config(train.image)
         return train_config
 
     def _get_eval_config(self, eval):
@@ -84,29 +85,25 @@ class Configure(object):
 
         anchor_config = self._get_anchor_config(model.anchor_list)
 
-
-        image_config = self._get_image_config(model.image)
-
         model_config = self._get_model_config(model)
 
         train_config = self._get_train_config(model.train)
 
         eval_config = self._get_eval_config(model.eval)
         # with tf.get_default_graph():
-        builder = model_builder.ModelBuilder({'model': model_config,
-                                              'image': image_config,
-                                              'train': train_config,
-                                              'anchor': anchor_config,
-                                              'eval': eval_config}, fake=True, input_class=SSDInputs)
-        # builder()
+        with tf.Graph().as_default():
+            builder = model_builder.ModelBuilder({'model': model_config,
+                                                  'train': train_config,
+                                                  'anchor': anchor_config,
+                                                  'eval': eval_config}, fake=True, input_class=SSDInputs)
+            # builder()
 
-        feature_map_size = [builder.model.endpoints[k].get_shape().as_list()[1:3] for k in anchor_config['src']]
-        anchor_config['feature_map_size'] = feature_map_size
+            feature_map_size = [builder.model.endpoints[k].get_shape().as_list()[1:3] for k in anchor_config['src']]
+            anchor_config['feature_map_size'] = feature_map_size
 
-        tf.reset_default_graph()
+        # tf.reset_default_graph()
         config = {}
         config['model'] = model_config
-        config['image'] = image_config
         config['anchor'] = anchor_config
         config['train'] = train_config
         config['eval'] = eval_config

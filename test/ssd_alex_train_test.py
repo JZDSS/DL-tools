@@ -9,9 +9,11 @@ import time
 def main(_):
     config = configure.Configure('/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssdd.config')
     config = config.get_config()
+
     log_dir = config['train']['log_dir']
     ckpt_dir = config['train']['ckpt_dir']
-    builder = ModelBuilder(config, fake=False, input_class=SSDInputs)
+
+    builder = ModelBuilder(config, fake=False, mode='train', input_class=SSDInputs)
     net = builder.model
     loss = net.calc_loss()
 
