@@ -1,6 +1,6 @@
 import six
 from abc import ABCMeta, abstractmethod
-from io.reader import Reader
+from oi.reader import Reader
 import tensorflow as tf
 
 
@@ -32,6 +32,5 @@ class TFRecordsReader(Reader):
             iterator = self._get_iterator(filenames, num_readers, read_threads, num_epochs)
         return self._post_process(iterator)
 
-    @abstractmethod
     def _post_process(self, iterator):
-        raise NotImplementedError
+        return iterator.get_next()

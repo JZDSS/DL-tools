@@ -1,144 +1,126 @@
 import tensorflow as tf
-from tensorflow.contrib import layers
-from tensorflow.contrib.framework import arg_scope
-from basenets import net
+from basenets import alexnet
 import numpy as np
+import os
+import pickle
+from oi.tfrecordsreader import TFRecordsReader
+tf.enable_eager_execution()
+
+class Converter(object):
+
+    def __init__(self, data_dir, out_dir):
+        self.data_dir = data_dir
+        self.out_dir = out_dir
+
+    def _tolist(self, value):
+        if not isinstance(value, list):
+            value = [value]
+        return value
+
+    def _bytes_feature(self, value):
+        value = self._tolist(value)
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=value))
+
+    def _int64_feature(self, value):
+        value = self._tolist(value)
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+
+    def _float_feature(self, value):
+        value = self._tolist(value)
+        return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+    def write(self):
+        raise NotImplementedError
 
 
-class AlexNet(net.Net):
+class CifarConverter(Converter):
+    def __init__(self, data_dir, out_dir):
+        super(CifarConverter, self).__init__(data_dir, out_dir)
 
-    def __init__(self, inputs, name='AlexNet', npy_path=None, weight_decay=0.0004, **kwargs):
-        super(AlexNet, self).__init__(weight_decay=weight_decay, name=name, **kwargs)
-        self.inputs = inputs
-        self.npy_path = npy_path
-        self.build()
-        if self.npy_path:
-            self.setup()
+    def _unpickle(self, filename):
+        # 打开文件
+        with open(filename, 'rb') as fo:
+            # Python 版的 CIFAR-10 数据集是用 Pickle 进行编码保存的，因此这里用 Pickle 对文件进行解码，得到图片的像素值和标注
+            data_dict = pickle.load(fo, encoding='bytes')
+        return data_dict
 
-    def set_npy_path(self, path):
-        self.npy_path = path
+    def __load_train_data(self, data_dir):
 
-    def build(self):
-        endpoints = self.endpoints
-        y = self.inputs['images']
-        with arg_scope([layers.conv2d], activation_fn=tf.nn.relu,
-                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
-                       biases_regularizer=layers.l2_regularizer(self.weight_decay)):
-            y = layers.conv2d(y, 96, (11, 11), 4, 'VALID', scope='conv1')
-            endpoints['conv1'] = y
-            y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
-            y1, y2 = tf.split(y, 2, 3)
-            y1 = layers.conv2d(y1, 128, (5, 5), 1, 'SAME', scope='conv2_1')
-            y2 = layers.conv2d(y2, 128, (5, 5), 1, 'SAME', scope='conv2_2')
-            endpoints['conv2_1'] = y1
-            endpoints['conv2_2'] = y2
-            y = tf.concat((y1, y2), 3)
-            endpoints['conv2'] = y
-            y = tf.nn.lrn(y, 5, 1, 0.0001, 0.75)
-            y = layers.conv2d(y, 384, (3, 3), 1, 'SAME', scope='conv3')
-            endpoints['conv3'] = y
-            y1, y2 = tf.split(y, 2, 3)
-            y1 = layers.conv2d(y1, 192, (3, 3), 1, 'SAME', scope='conv4_1')
-            y2 = layers.conv2d(y2, 192, (3, 3), 1, 'SAME', scope='conv4_2')
-            endpoints['conv4_1'] = y1
-            endpoints['conv4_2'] = y2
-            y1 = layers.conv2d(y1, 128, (3, 3), 1, 'SAME', scope='conv5_1')
-            y2 = layers.conv2d(y2, 128, (3, 3), 1, 'SAME', scope='conv5_2')
-            endpoints['conv5_1'] = y1
-            endpoints['conv5_2'] = y2
-            y = tf.concat([y1, y2], 3)
-            endpoints['conv5'] = y
-            y = layers.conv2d(y, 4096, (6, 6), 1, 'VALID', scope='fc6')
-            endpoints['fc6'] = y
-            y = layers.conv2d(y, 4096, (1, 1), 1, 'VALID', scope='fc7')
-            endpoints['fc7'] = y
-            y = layers.conv2d(y, 1000, (1, 1), 1, 'VALID', scope='fc8', activation_fn=None)
-            endpoints['fc8'] = y
-            self.outputs['logits'] = tf.squeeze(y)
+        data = np.ndarray(shape=(0, 32 * 32 * 3), dtype=np.uint8)
+        labels = np.ndarray(shape=0, dtype=np.int64)
 
-    def calc_loss(self):
-        pass
+        for i in range(5):
+            filename = os.path.join(data_dir, "data_batch_{}".format(i + 1))
+            tmp = self._unpickle(filename)
 
-    def get_update_ops(self):
-        return []
+            data = np.append(data, tmp[b'data'], axis=0)
+            labels = np.append(labels, tmp[b'labels'], axis=0)
+            print('load training data: data_batch_{}'.format(i + 1))
 
-    def setup(self):
-        """Define ops that load pre-trained vgg16 net's weights and biases and add them to tf.GraphKeys.INIT_OP
-        collection.
-        """
-
-        # caffe-tensorflow/convert.py can only run with Python2. Since the default encoding format of Python2 is ASCII
-        # but the default encoding format of Python3 is UTF-8, it will raise an error without 'encoding="latin1"'
-        weight_dict = np.load(self.npy_path, encoding="latin1").item()
-        scopes = ['conv1', 'conv3']
-        for scope in scopes:
-            with tf.variable_scope(scope, reuse=True):
-                weights = tf.get_variable('weights')
-                biases = tf.get_variable('biases')
-                w_init_op = weights.assign(weight_dict[scope]['weights'])
-                b_init_op = biases.assign(weight_dict[scope]['biases'])
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
-
-        with tf.variable_scope('fc6', reuse=True):
-            weights = tf.get_variable('weights')
-            biases = tf.get_variable('biases')
-            w = weight_dict['fc6']['weights']
-            w = np.reshape(w, (6, 6, 256, 4096))
-            w_init_op = weights.assign(w)
-            b_init_op = biases.assign(weight_dict['fc6']['biases'])
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
-
-        scopes = ['fc7', 'fc8']
-        for scope in scopes:
-            with tf.variable_scope(scope, reuse=True):
-                weights = tf.get_variable('weights')
-                biases = tf.get_variable('biases')
-                w = weight_dict[scope]['weights']
-                w = np.expand_dims(w, 0)
-                w = np.expand_dims(w, 0)
-                w_init_op = weights.assign(w)
-                b_init_op = biases.assign(weight_dict[scope]['biases'])
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
-
-        scopes = ['conv2', 'conv4', 'conv5']
-        for scope in scopes:
-            w = weight_dict[scope]['weights']
-            w1, w2 = np.split(w, 2, 3)
-            b = weight_dict[scope]['biases']
-            b1, b2 = np.split(b, 2, 0)
-            with tf.variable_scope(scope + '_1', reuse=True):
-                weights = tf.get_variable('weights')
-                biases = tf.get_variable('biases')
-                w_init_op = weights.assign(w1)
-                b_init_op = biases.assign(b1)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
-            with tf.variable_scope(scope + '_2', reuse=True):
-                weights = tf.get_variable('weights')
-                biases = tf.get_variable('biases')
-                w_init_op = weights.assign(w2)
-                b_init_op = biases.assign(b2)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-                tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
+        data = np.reshape(data, [-1, 32, 32, 3], 'F').transpose((0, 2, 1, 3))
+        return data, labels
 
 
+    def __load_test_data(self, data_dir):
+        filename = os.path.join(data_dir, "test_batch")
+        tmp = self._unpickle(filename)
+        data = np.ndarray(shape=(0, 32 * 32 * 3), dtype=np.uint8)
+        labels = np.ndarray(shape=0, dtype=np.int64)
+
+        data = np.append(data, tmp[b'data'], axis=0)
+        labels = np.append(labels, tmp[b'labels'])
+
+        data = np.reshape(data, [-1, 32, 32, 3], 'F').transpose((0, 2, 1, 3))
+        print('load test data: test_batch')
+        return data, labels
+
+    def write(self):
+        train_data, train_labels = self.__load_train_data(self.data_dir)
+        test_data, test_labels = self.__load_test_data(self.data_dir)
+        if not os._exists(self.out_dir):
+            os.makedirs(self.out_dir)
+        def w(data, labels, name):
+            writer = tf.python_io.TFRecordWriter(os.path.join(self.out_dir, name))
+            for i in range(data.shape[0]):
+                image = data[i, :].tobytes()
+                label = labels[i]
+                example = tf.train.Example(features=tf.train.Features(feature={
+                    'image': self._bytes_feature(image),
+                    'label': self._int64_feature(label),
+                }))
+                writer.write(example.SerializeToString())
+            writer.close()
+        w(train_data, train_labels, 'train.tfrecords')
+        w(test_data, test_labels, 'test.tfrecords')
+
+class CifarReader(TFRecordsReader):
+
+    def __init__(self, batch_size):
+        super(CifarReader, self).__init__(batch_size)
+    def _parser(self, record):
+        example = tf.parse_single_example(record,
+                                          features={
+                                              'image': tf.FixedLenFeature([], dtype=tf.string),
+                                              'label': tf.FixedLenFeature([], dtype=tf.int64)},
+                                          name='feature')
+        image = tf.decode_raw(example['image'], tf.int8)
+        image = tf.cast(tf.reshape(image, [32, 32, 3]), tf.float32)
+        label = example['label']
+        return image, label
+    def _post_process(self, iterator):
+        return iterator.get_next()
+
+
+class styleTransfer(object):
+    def __init__(self):
+        with tf.contrib.layers.arg_scope([tf.contrib.layers.conv2d], {'trainable': False}):
+            self.loss_net = alexnet.AlexNet(x, npy_path='./npy/alexnet.npy')
+    def loss(self):
+        endpoints = self.loss_net.endpoints
 if __name__ == '__main__':
+    # x = tf.placeholder(dtype=tf.float32, shape=[None, 227, 227, 3])
 
-    x = tf.placeholder(shape=[None, 227, 227, 3], dtype=tf.float32)
-    net = AlexNet(x, npy_path='../npy/alexnet.npy')
-    pred = net.outputs['logits']
-
-    init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
-
-    import cv2
-    img = cv2.imread('../images/dog.jpg')
-    img = cv2.resize(img, (227, 227))
-    img = img
-    img = np.expand_dims(img, 0)
-    with tf.Session() as sess:
-        sess.run(init_ops)
-        print(sess.run(tf.argmax(pred, 0), feed_dict={x: img}))
+    # CifarConverter('../cifar-10-batches-py', '../tfrecords/cifar-10').write()
+    images, labels = CifarReader(1).read('../tfrecords/cifar-10/train.tfrecords', 1, 1)
+    c = 1
 
