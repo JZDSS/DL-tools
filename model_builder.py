@@ -43,3 +43,13 @@ class ModelBuilder(object):
 
             self.ckpt_dir = self.config[self.mode]['ckpt_dir']
             self.log_dir = self.config[self.mode]['log_dir']
+        elif type == 'SSD_MOBILE':
+            self.model = SSDMobileNet(self.net_inputs,
+                                    self.model_config['num_classes'],
+                                    self.ground_truth,
+                                    anchor_config=self.config['anchor'],
+                                    name=self.model_config['name'],
+                                    npy_path=self.model_config['npy_path'] if not self.fake else None, **kwargs)
+
+            self.ckpt_dir = self.config[self.mode]['ckpt_dir']
+            self.log_dir = self.config[self.mode]['log_dir']

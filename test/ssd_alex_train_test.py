@@ -7,7 +7,7 @@ import time
 
 
 def main(_):
-    config = configure.Configure('/home/yqi/workspace/DL-tools/ssd/ssdd.config')
+    config = configure.Configure('../ssd/ssdd.config')
     config = config.get_config()
 
     log_dir = config['train']['log_dir']
@@ -48,12 +48,12 @@ def main(_):
             try:
                 if i % d == 0:
                     saver.save(sess, os.path.join(ckpt_dir, 'ssd_model'), global_step=i)
-                    summary = sess.run(summ)
+                    summary = sess.run(summ, feed_dict={net.is_training: False})
                     train_writer.add_summary(summary, i)
                     train_writer.flush()
                     if i != 0:
                         time.sleep(10)
-                sess.run(train_op)
+                sess.run(train_op, feed_dict={net.is_training: True})
                 i += 1
             except tf.errors.OutOfRangeError as e:
                 print(e)

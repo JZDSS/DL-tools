@@ -1,10 +1,12 @@
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
+from tensorflow.contrib.framework import arg_scope
 import numpy as np
 
 from basenets import mobilenet
 from basenets import utils
 from ssd.nets import ssdbase
+
 
 class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
 
@@ -33,45 +35,38 @@ class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
             self.ssd_setup()
 
     def base_net(self):
-        del self.endpoints['fc6']
-        del self.endpoints['fc7']
-        del self.endpoints['fc8']
+        del self.endpoints['fc1']
+        del self.endpoints['global_pooling']
         self.down_sample()
 
     def down_sample(self):
-        endpoints = self.endpoints
-        y = endpoints['conv5']
-        with tf.contrib.framework.arg_scope([layers.conv2d],
-                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
-                       biases_regularizer=layers.l2_regularizer(self.weight_decay)):
-            with tf.variable_scope('rebuild'):
-                y = layers.conv2d(y, 1024, [3, 3], 1, 'SAME', rate=6, scope='fc6')
-                endpoints['fc6'] = y
-                y = layers.conv2d(y, 1024, [1, 1], 1, 'VALID', scope='fc7')
-                endpoints['fc7'] = y
+        pass
 
     def extra_net(self):
         endpoints = self.endpoints
-        with tf.contrib.framework.arg_scope([layers.conv2d],
-                                            weights_regularizer=layers.l2_regularizer(self.weight_decay),
-                                            biases_regularizer=layers.l2_regularizer(self.weight_decay)):
-            y = endpoints['fc7']
-            y = layers.conv2d(y, 256, [1, 1], 1, 'SAME', scope='conv8_1')
-            endpoints['conv8_1'] = y
-            y = layers.conv2d(y, 512, [3, 3], 2, 'SAME', scope='conv8_2')
-            endpoints['conv8_2'] = y
-            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv9_1')
-            endpoints['conv9_1'] = y
-            y = layers.conv2d(y, 256, [3, 3], 2, 'SAME', scope='conv9_2')
-            endpoints['conv9_2'] = y
-            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv10_1')
-            endpoints['conv10_1'] = y
-            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv10_2')
-            endpoints['conv10_2'] = y
-            y = layers.conv2d(y, 128, [1, 1], 1, 'SAME', scope='conv11_1')
-            endpoints['conv11_1'] = y
-            y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv11_2')
-            endpoints['conv11_2'] = y
+        with arg_scope([layers.conv2d],
+                       padding='SAME',
+                       activation_fn=tf.nn.relu6,
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
+                       normalizer_fn=layers.batch_norm,
+                       normalizer_params={'is_training': self.is_training}):
+            y = endpoints['Pointwise_Conv2d_13']
+            y = layers.conv2d(y, 256, (1, 1), 1, scope='conv1')
+            endpoints['conv1'] = y
+            y = layers.conv2d(y, 512, (3, 3), 2, scope='conv2')
+            endpoints['conv2'] = y
+            y = layers.conv2d(y, 128, (1, 1), 1, scope='conv3')
+            endpoints['conv3'] = y
+            y = layers.conv2d(y, 256, (3, 3), 2, scope='conv4')
+            endpoints['conv4'] = y
+            y = layers.conv2d(y, 128, (1, 1), 1, scope='conv5')
+            endpoints['conv5'] = y
+            y = layers.conv2d(y, 256, (3, 3), 2, scope='conv6')
+            endpoints['conv6'] = y
+            y = layers.conv2d(y, 64, (1, 1), 1, scope='conv7')
+            endpoints['conv7'] = y
+            y = layers.conv2d(y, 128, (3, 3), 2, scope='conv8')
+            endpoints['conv8'] = y
 
     def predict(self):
         feature_maps = [self.endpoints[f] for f in self.src]
