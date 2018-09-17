@@ -2,22 +2,22 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 import numpy as np
 
-from basenets import alexnet
+from basenets import mobilenet
 from basenets import utils
 from ssd.nets import ssdbase
 
-class SSDAlexNet(ssdbase.SSDBase):
+class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
 
     def __init__(self,
                  inputs,
                  num_classes,
                  ground_truth,
                  anchor_config,
-                 name='SSD_AlexNet',
+                 name='SSD_MobileNet',
                  npy_path=None,
-                 weight_decay=0.0001,
+                 weight_decay=0.00004,
                  **kwargs):
-        super(SSDAlexNet, self).__init__(inputs, name, npy_path, weight_decay=weight_decay,
+        super(SSDMobileNet, self).__init__(inputs, name, npy_path, weight_decay=weight_decay,
                                          **kwargs)
         self.ground_truth = ground_truth
         self.num_classes = num_classes
@@ -200,3 +200,4 @@ class SSDAlexNet(ssdbase.SSDBase):
         total_loss = loc_loss + cls_loss_pos + cls_loss_neg
         tf.summary.scalar('total_loss', total_loss)
         return total_loss
+

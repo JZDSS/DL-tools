@@ -13,3 +13,4 @@ ignore/
 *log
 ckpt*/
 *_pb2.py
+cifar-10-batches-py/
