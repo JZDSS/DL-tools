@@ -6,7 +6,7 @@ def main():
     from ssd.configure import Configure
     import os
     # tf.enable_eager_execution()
-    config = Configure('/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssdd.config').get_config()
+    config = Configure('/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssd_mobile.config').get_config()
     ipt = SSDInputs(config, False)
     images, ground_truth = ipt.input_pipeline(os.path.join('../ssd', '*.tfrecords'), 1, 1)
     with tf.Session() as sess:

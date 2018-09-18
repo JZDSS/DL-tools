@@ -78,6 +78,7 @@ class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
         location_list = []
         classification_list = []
         with tf.contrib.framework.arg_scope([layers.conv2d],
+                                            activation_fn=None,
                                             weights_regularizer=layers.l2_regularizer(self.weight_decay),
                                             biases_regularizer=layers.l2_regularizer(self.weight_decay)):
             for i, feature_map in enumerate(feature_maps):

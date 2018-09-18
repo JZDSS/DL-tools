@@ -11,6 +11,7 @@ class AlexNet(net.Net):
         super(AlexNet, self).__init__(weight_decay=weight_decay, name=name, **kwargs)
         self.inputs = inputs
         self.npy_path = npy_path
+        self.is_training = tf.placeholder(dtype=tf.bool, shape=[])
         self.build()
         if self.npy_path:
             self.setup()

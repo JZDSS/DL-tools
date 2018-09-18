@@ -4,10 +4,10 @@ from ssd import configure
 from inputs.ssdinputs import SSDInputs
 from model_builder import ModelBuilder
 import time
-
+# tf.enable_eager_execution()
 
 def main(_):
-    config = configure.Configure('../ssd/ssdd.config')
+    config = configure.Configure('../ssd/ssd_mobile.config')
     config = config.get_config()
 
     log_dir = config['train']['log_dir']
@@ -17,25 +17,37 @@ def main(_):
     net = builder.model
     loss = net.calc_loss()
 
-    optimizer = tf.train.AdamOptimizer(0.001)
-    train_op = optimizer.minimize(loss)
+    optimizer = tf.train.AdamOptimizer(0.0005)
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        train_op = optimizer.minimize(loss)
     saver = tf.train.Saver(name="saver", max_to_keep=5)
     summ = tf.summary.merge_all()
     with tf.Session() as sess:
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
-
+        # o_l, o_c, gt_l, gt_c = sess.run([net.outputs['location'],
+        #                                  net.outputs['classification'],
+        #                                  net.ground_truth['locations'],
+        #                                  net.ground_truth['labels']], feed_dict={net.is_training: True})
+        # c = sess.run(tf.get_default_graph().get_tensor_by_name('pred_0/weights:0'))
+        # b = sess.run(net.inputs)
+        # a = sess.run(net.endpoints, feed_dict={net.is_training: True})
         i = 0
         if os.listdir(ckpt_dir):
-            print('train from ckpt')
+            print('Train from ckpt')
             dir = tf.train.latest_checkpoint(ckpt_dir)
             i = int(dir.split('-')[-1])
             saver.restore(sess, dir)
         else:
-            print('train from alexnet')
+            print('Try to train from pre-trained net')
             init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
-            assert init_ops is not []
-            sess.run(init_ops)
+            try:
+                assert init_ops
+                sess.run(init_ops)
+            except Exception as e:
+                print(e)
+                print('Failed! Train from 0')
         train_writer = tf.summary.FileWriter(log_dir, sess.graph)
         train_writer.flush()
 

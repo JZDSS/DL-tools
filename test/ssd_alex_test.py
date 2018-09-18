@@ -12,11 +12,11 @@ from model_builder import ModelBuilder
 
 # tf.enable_eager_execution()
 
-config = Configure().get_config()
+config = Configure(path='../ssd/ssd_alex.config').get_config()
 
-log_dir = '../log/ssd'
-ckpt_dir = '../ckpt/ssd'
-filenames = config['image']['path']
+log_dir = config['eval']['log_dir']
+ckpt_dir = config['eval']['ckpt_dir']
+# filenames = config['image']['path']
 
 builder = ModelBuilder(config, mode='eval', input_class=SSDInputs)
 
@@ -43,17 +43,19 @@ with tf.Session() as sess:
     dir = tf.train.latest_checkpoint(ckpt_dir)
     saver.restore(sess, dir)
 
-
     while True:
-        im, b, p = sess.run([net_inputs['images'], box, prob])
-        im = (im * 128 + 128).astype(np.uint8)[0, :]
-        for bb, pp, c in zip(b, p, color):
-            for bbb, ppp in zip(bb, pp):
-                cv2.rectangle(im, (int(bbb[1]*300), int(bbb[0]*300)), (int(bbb[3]*300), int(bbb[2]*300)), c, 2)
-                print(ppp)
-        cv2.imshow("", im)
-        cv2.waitKey()
-        a = 1
+        try:
+            im, b, p = sess.run([net_inputs['images'], box, prob], feed_dict={net.is_training: False})
+            im = (im * 128 + 128).astype(np.uint8)[0, :]
+            for bb, pp, c in zip(b, p, color):
+                for bbb, ppp in zip(bb, pp):
+                    cv2.rectangle(im, (int(bbb[1]*300), int(bbb[0]*300)), (int(bbb[3]*300), int(bbb[2]*300)), c, 2)
+                    print(ppp)
+            cv2.imshow("", im)
+            cv2.waitKey(0)
+        except tf.errors.OutOfRangeError as e:
+            print(e)
+            break
         # result = (sess.run(drawed)*255).astype(np.uint8)[0,:]
         # cv2.imshow("", result)
         # cv2.waitKey(0)

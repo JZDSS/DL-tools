@@ -371,6 +371,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         # mean = tf.reshape(mean, [1, 1, 3])
         image = image - 128
         image = image / 128.0
+        # image = image / 1.
 
 
         return [image] + locations + labels

@@ -8,7 +8,7 @@ from inputs.ssdinputs import SSDInputs
 
 class Configure(object):
 
-    def __init__(self, path='/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssdd.config'):
+    def __init__(self, path='/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssd_mobile.config'):
         self.config_file = path
 
     def _get_anchor_config(self, anchor_list):
@@ -74,6 +74,7 @@ class Configure(object):
         eval_config['log_dir'] = eval.log_dir
         eval_config['ckpt_dir'] = eval.ckpt_dir
         eval_config['num_epochs'] = eval.num_epochs if eval.num_epochs != 0 else None
+        eval_config['image'] = self._get_image_config(eval.image)
         return eval_config
 
     def get_config(self):

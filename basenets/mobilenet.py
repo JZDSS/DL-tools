@@ -11,6 +11,7 @@ class MobileNet(net.Net):
         super(MobileNet, self).__init__(weight_decay=weight_decay, name=name, **kwargs)
         self.inputs = inputs
         self.npy_path = npy_path
+        # self.is_training = tf.constant(True, dtype=tf.bool)
         self.is_training = tf.placeholder(dtype=tf.bool, shape=[])
         self.build()
         if self.npy_path:
@@ -25,6 +26,7 @@ class MobileNet(net.Net):
         with arg_scope([layers.conv2d, layers.separable_conv2d],
                        padding='SAME',
                        activation_fn=tf.nn.relu6,
+                       weights_initializer=layers.xavier_initializer(),
                        weights_regularizer=layers.l2_regularizer(self.weight_decay),
                        normalizer_fn=layers.batch_norm,
                        normalizer_params={'is_training': self.is_training}):

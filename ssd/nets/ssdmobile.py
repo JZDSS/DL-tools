@@ -72,9 +72,11 @@ class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
         feature_maps = [self.endpoints[f] for f in self.src]
         location_list = []
         classification_list = []
-        with tf.contrib.framework.arg_scope([layers.conv2d],
-                                            weights_regularizer=layers.l2_regularizer(self.weight_decay),
-                                            biases_regularizer=layers.l2_regularizer(self.weight_decay)):
+        with arg_scope([layers.conv2d],
+                       padding='SAME',
+                       activation_fn=None,
+                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
+                       biases_regularizer=layers.l2_regularizer(self.weight_decay)):
             for i, feature_map in enumerate(feature_maps):
                 num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
                 prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
@@ -102,32 +104,15 @@ class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
         self.outputs['classification'] = classification_list
 
     def ssd_setup(self):
-        weight_dict = np.load(self.npy_path, encoding="latin1").item()
-        with tf.variable_scope('rebuild/fc6', reuse=True):
-            weights = tf.get_variable('weights')
-            biases = tf.get_variable('biases')
-            w = weight_dict['fc6']['weights']
-            b = weight_dict['fc6']['biases']
-            w = np.reshape(w, (6, 6, 256, 4096))
-            w = w[0:-1:2, 0:-1:2, :, 0:-1:4]
-            b = b[0:-1:4]
-            w_init_op = weights.assign(w)
-            b_init_op = biases.assign(b)
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
+        # with tf.Session() as sess:
+        #     tf.initialize_all_variables().run()
+        #     a = sess.run('Conv2d_0/weights:0')
+        weight_dict = np.load(self.npy_path).item()
+        with tf.variable_scope('', reuse=True):
+            for k in weight_dict:
+                init_op = tf.get_variable(k).assign(weight_dict[k])
+                tf.add_to_collection(tf.GraphKeys.INIT_OP, init_op)
 
-        with tf.variable_scope('rebuild/fc7', reuse=True):
-            weights = tf.get_variable('weights')
-            biases = tf.get_variable('biases')
-            w = weight_dict['fc7']['weights']
-            b = weight_dict['fc7']['biases']
-            w = np.reshape(w, (1, 1, 4096, 4096))
-            w = w[:, :, 0:-1:4, 0:-1:4]
-            b = b[0:-1:4]
-            w_init_op = weights.assign(w)
-            b_init_op = biases.assign(b)
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, w_init_op)
-            tf.add_to_collection(tf.GraphKeys.INIT_OP, b_init_op)
 
     def calc_loss(self):
         location = self.outputs['location']
