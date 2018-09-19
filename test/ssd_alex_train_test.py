@@ -2,7 +2,7 @@ import tensorflow as tf
 import os
 from ssd import configure
 from inputs.ssdinputs import SSDInputs
-from model_builder import ModelBuilder
+from builder.model_builder import ModelBuilder
 import time
 # tf.enable_eager_execution()
 

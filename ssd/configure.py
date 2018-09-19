@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 from ssd.protos import model_pb2
 from google.protobuf import text_format
-import model_builder
+from builder import model_builder
 from inputs.ssdinputs import SSDInputs
 
 

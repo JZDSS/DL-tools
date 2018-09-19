@@ -2,12 +2,13 @@ import tensorflow as tf
 import numpy as np
 import basenets
 import cv2
+import time
 
 
 def main(_):
     x = tf.placeholder(dtype=tf.float32, shape=(None, 227, 227, 3))
 
-    net = basenets.AlexNet(x, npy_path='../npy/alexnet.npy')
+    net = basenets.AlexNet({'images': x}, npy_path='../npy/alexnet.npy')
     init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
 
     # test multiple images
@@ -30,6 +31,15 @@ def main(_):
 
     with tf.Session() as sess:
         sess.run(init_ops)
+        while True:
+            a = time.time()
+            sess.run(net.endpoints['fc8'], feed_dict={x: img})
+            b = time.time()
+            print('1', b-a)
+            b = time.time()
+            sess.run(net.endpoints, feed_dict={x: img})
+            c = time.time()
+            print('2', c - b)
         print('Category numbers are:', sess.run(prediction, feed_dict={x: img}))
         print('Please look up `test/imagenet_classes.txt` for exact category names!')
 

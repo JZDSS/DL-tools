@@ -1,13 +1,10 @@
-import os
-
 import cv2
 import numpy as np
 import tensorflow as tf
 
 from inputs.ssdinputs import SSDInputs
 from ssd.configure import Configure
-from ssd.nets import ssdalexnet
-from model_builder import ModelBuilder
+from builder.model_builder import ModelBuilder
 
 
 # tf.enable_eager_execution()
