@@ -22,7 +22,7 @@ class AlexNet(net.Net):
     def build(self):
         endpoints = self.endpoints
         y = self.inputs['images']
-        with arg_scope([layers.conv2d], activation_fn=tf.nn.relu,
+        with arg_scope([layers.conv2d], activation_fn=tf.nn.relu6,
                        weights_regularizer=layers.l2_regularizer(self.weight_decay),
                        biases_regularizer=layers.l2_regularizer(self.weight_decay)):
             y = layers.conv2d(y, 96, (11, 11), 4, 'VALID', scope='conv1')
