@@ -10,4 +10,5 @@ message Train {
     required int32 batch_size = 3 [default=8];
     required int32 num_epochs = 4 [default=40];
     required ImageConfig image = 5;
+    required float weight_decay = 6 [default=0.00004];
 }

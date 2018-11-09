@@ -66,6 +66,7 @@ class Configure(object):
         train_config['ckpt_dir'] = train.ckpt_dir
         train_config['num_epochs'] = train.num_epochs
         train_config['image'] = self._get_image_config(train.image)
+        train_config['weight_decay'] = train.weight_decay
         return train_config
 
     def _get_eval_config(self, eval):

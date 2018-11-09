@@ -39,7 +39,9 @@ class ModelBuilder(object):
                                     self.ground_truth,
                                     anchor_config=self.config['anchor'],
                                     name=self.model_config['name'],
-                                    npy_path=self.model_config['npy_path'] if not self.fake else None, **kwargs)
+                                    npy_path=self.model_config['npy_path'] if not self.fake else None,
+                                    weight_decay=self.config['train']['weight_decay'] if self.mode is 'train' else 0.1,
+                                    **kwargs)
 
             self.ckpt_dir = self.config[self.mode]['ckpt_dir']
             self.log_dir = self.config[self.mode]['log_dir']
