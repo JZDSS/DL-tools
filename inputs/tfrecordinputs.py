@@ -19,7 +19,7 @@ class TFRecordsInputs(Inputs):
         dataset = dataset.interleave(
             tf.data.TFRecordDataset, num_readers, 1)
         dataset = dataset.map(self._parser, read_threads)
-        dataset = dataset.shuffle(buffer_size=10000)
+        dataset = dataset.shuffle(buffer_size=10 * self.batch_size)
         dataset = dataset.apply(tf.contrib.data.batch_and_drop_remainder(self.batch_size))
         # dataset = dataset.batch(self.batch_size)
         dataset = dataset.repeat(num_epochs)

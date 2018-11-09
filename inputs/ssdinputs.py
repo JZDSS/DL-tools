@@ -324,8 +324,8 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
             g_cx = (g_cx - d_cx) / d_w
             g_cy = (g_cy - d_cy) / d_h
             mask = tf.not_equal(final_labels, 0)
-            g_w = tf.where(mask, tf.log(g_w / d_w), g_w)
-            g_h = tf.where(mask, tf.log(g_h / d_h), g_h)
+            g_w = tf.where(mask, tf.log(g_w / d_w + 1e-5), g_w)
+            g_h = tf.where(mask, tf.log(g_h / d_h + 1e-5), g_h)
 
             locations_all.append(tf.stack([g_cx, g_cy, g_w, g_h], -1))
             labels_all.append(final_labels)
