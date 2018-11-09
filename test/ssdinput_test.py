@@ -1,14 +1,16 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 from inputs.ssdinputs import SSDInputs
 import tensorflow as tf
 import numpy as np
+from ssd.configure import Configure
+
 
 def main():
-    from ssd.configure import Configure
-    import os
     # tf.enable_eager_execution()
-    config = Configure('/home/yqi/Desktop/workspace/PycharmProjects/DL-tools/ssd/ssd_mobile.config').get_config()
-    ipt = SSDInputs(config, False)
-    images, ground_truth = ipt.input_pipeline(os.path.join('../ssd', '*.tfrecords'), 1, 1)
+    config = Configure('/home/yqi/workspace/DL-tools/ssd/ssd_alex.config').get_config()
+    ipt = SSDInputs(config, config['eval']['batch_size'])
+    images, ground_truth = ipt.input_pipeline(os.path.join('../ssd', '*train.tfrecords'), 1, 1)
     with tf.Session() as sess:
         while True:
             print(images['images'])

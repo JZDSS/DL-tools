@@ -7,7 +7,7 @@ import time
 # tf.enable_eager_execution()
 
 def main(_):
-    config = configure.Configure('../ssd/ssd_mobile.config')
+    config = configure.Configure('../ssd/ssd_alex.config')
     config = config.get_config()
 
     log_dir = config['train']['log_dir']
@@ -17,7 +17,7 @@ def main(_):
     net = builder.model
     loss = net.calc_loss()
 
-    optimizer = tf.train.AdamOptimizer(0.0005)
+    optimizer = tf.train.AdamOptimizer(0.0005, 0.9)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
         train_op = optimizer.minimize(loss)

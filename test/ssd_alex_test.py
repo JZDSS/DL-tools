@@ -1,3 +1,5 @@
+import os
+os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import cv2
 import numpy as np
 import tensorflow as tf
@@ -26,7 +28,7 @@ pipeline = builder.pipeline
 # xxx = tf.placeholder(dtype=tf.float32, shape=(config['train']['batch_size'], 300, 300, 3))
 # net = ssdalexnet.SSDAlexNet(net_inputs, 3, ground_truth, anchor_config=anchor_config)
 
-box, prob = pipeline.decode(net.outputs, 3)
+box, prob = pipeline.decode(net.outputs, config['model']['num_classes'])
 
 mean = np.array([123, 117, 104])
 mean = np.reshape(mean, [1, 1, 3])
@@ -42,10 +44,13 @@ with tf.Session() as sess:
 
     while True:
         try:
+            # b = sess.run(net.outputs['classification'])
+            # print(b)
             im, b, p = sess.run([net_inputs['images'], box, prob], feed_dict={net.is_training: False})
             im = (im * 128 + 128).astype(np.uint8)[0, :]
             for bb, pp, c in zip(b, p, color):
                 for bbb, ppp in zip(bb, pp):
+                    # if ppp > 0.5:
                     cv2.rectangle(im, (int(bbb[1]*300), int(bbb[0]*300)), (int(bbb[3]*300), int(bbb[2]*300)), c, 2)
                     print(ppp)
             cv2.imshow("", im)

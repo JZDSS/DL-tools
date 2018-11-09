@@ -12,7 +12,7 @@ from xml.etree import ElementTree
 # }
 
 
-txt2label = {'bottle': 1, 'fish': 2, 'other': 3}
+txt2label = {'fish': 1}
 
 class converter(object):
 
@@ -95,7 +95,7 @@ class converter(object):
         writer.close()
 
 def main():
-    c = converter('/home/yqi/Desktop/workspace/PycharmProjects/float3', './test.tfrecords')
+    c = converter('/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/test', './toy-test.tfrecords')
     c.convert()
 
 if __name__ == '__main__':
