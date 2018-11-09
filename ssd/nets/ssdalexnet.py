@@ -138,68 +138,80 @@ class SSDAlexNet(alexnet.AlexNet, ssdbase.SSDBase):
     def calc_loss(self):
         location = self.outputs['location']
         classification = self.outputs['classification']
+        batch_sise = classification[0].get_shape().as_list()[0]
+
+        location = tf.unstack(tf.concat([tf.reshape(t, [batch_sise, -1,  4]) for t in location], axis=1))
+        l_gt = self.ground_truth['locations']
+        l_gt = tf.unstack(tf.concat([tf.reshape(t, [batch_sise, -1, 4]) for t in l_gt], axis=1))
+
         cls_loss = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
                 for (logits, labels) in zip(classification, self.ground_truth['labels'])]
-        cls_loss = tf.concat([layers.flatten(t) for t in cls_loss], axis=-1)
+        cls_loss = tf.unstack(tf.concat([layers.flatten(t) for t in cls_loss], axis=-1))
 
-        loc_loss = [tf.reduce_sum(tf.losses.huber_loss(target, loc, reduction='none'), axis=-1)
-                    for (target, loc) in zip(self.ground_truth['locations'], location)]
-        loc_loss = tf.concat([layers.flatten(t) for t in loc_loss], axis=-1)
+        # loc_loss = [tf.reduce_sum(tf.losses.huber_loss(target, loc, reduction='none'), axis=-1)
+        #             for (target, loc) in zip(self.ground_truth['locations'], location)]
+        # loc_loss = tf.unstack(tf.concat([layers.flatten(t) for t in loc_loss], axis=-1))
 
         flattened_label = tf.concat([layers.flatten(t) for t in self.ground_truth['labels']], axis=-1)
 
-        cls_loss_list = tf.unstack(cls_loss)
+        # cls_loss_list = tf.unstack(cls_loss)
         # loc_loss_list = tf.unstack(loc_loss)
         flattened_label_list = tf.unstack(flattened_label)
 
-        masks = []
         poss = []
         negs = []
-        for i, cls in enumerate(cls_loss_list):
+        num_pos_l = []
+        # num_neg_l = []
+        cls_loss_pos = []
+        cls_loss_neg = []
+        loc_loss_pos = []
+        for i, cls in enumerate(cls_loss):
             sorted_cls_loss = tf.contrib.framework.sort(cls, -1, 'DESCENDING')
             labels = flattened_label_list[i]
             pos = tf.greater(labels, 0)
             neg = tf.equal(labels, 0)
             num_pos = tf.reduce_sum(tf.to_int32(pos))
+            num_neg = 3 * num_pos
             max_neg = tf.reduce_sum(tf.to_int32(neg))
-            max_idx = tf.minimum(3 * num_pos, max_neg - 1)
-            num_selected = num_pos + max_idx + 1
+            max_idx = tf.minimum(num_neg - 1, max_neg - 1)
             min_score = sorted_cls_loss[max_idx]
             selected = tf.greater(cls, min_score)
             neg = tf.logical_and(neg, selected)
 
-            mask = tf.logical_or(pos, neg)
             ass = tf.assert_none_equal(num_pos, 0)
             tf.add_to_collection(ass, "ASSERT")
-            # masks.append(tf.to_float(mask))
-            # poss.append(tf.to_float(pos))
-            # negs.append(tf.to_float(neg))
-            masks.append(utils.safe_division(tf.to_float(mask), tf.to_float(num_pos)))
-            poss.append(utils.safe_division(tf.to_float(pos), tf.to_float(num_pos)))
-            negs.append(utils.safe_division(tf.to_float(neg), tf.to_float(num_pos)))
+            # cls = cls
+            a = location[i]
+            loc = tf.boolean_mask(location[i], pos)
+            target = tf.boolean_mask(l_gt[i], pos)
 
-        cls_mask = tf.stack([m for m in masks], axis=0)
-        pos_mask = tf.stack([m for m in poss], axis=0)
-        neg_mask = tf.stack([m for m in negs], axis=0)
+            loc = tf.losses.huber_loss(target, loc, reduction='none')
+            # pos = tf.greater(pos, 0)
+            # neg = tf.greater(neg, 0)
+            cls_loss_pos.append(tf.reduce_sum(tf.boolean_mask(cls, pos)))
+            cls_loss_neg.append(tf.reduce_sum(tf.boolean_mask(cls, neg)))
+            loc_loss_pos.append(tf.reduce_sum(loc))
+            num_pos_l.append(num_pos)
 
-        cls_loss_pos = tf.multiply(cls_loss, pos_mask)
-        cls_loss_pos = tf.reduce_sum(cls_loss_pos, axis=-1)
-        cls_loss_pos = tf.reduce_mean(cls_loss_pos)
+        num_pos = tf.to_float(tf.add_n(num_pos_l))
 
-        cls_loss_neg = tf.multiply(cls_loss, neg_mask)
-        cls_loss_neg = tf.reduce_sum(cls_loss_neg, axis=-1)
-        cls_loss_neg = tf.reduce_mean(cls_loss_neg)
+        loc_loss = tf.add_n(loc_loss_pos) / num_pos
+        cls_loss_pos = tf.add_n(cls_loss_pos) / num_pos
+        cls_loss_neg = tf.add_n(cls_loss_neg) / num_pos
+        num_pos /= batch_sise
 
-        loc_loss = tf.multiply(loc_loss, pos_mask)
-        loc_loss = tf.reduce_sum(loc_loss, axis=-1)
-        loc_loss = tf.reduce_mean(loc_loss)
+        reg = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_loss = tf.add_n(reg)
 
-        tf.summary.scalar('loc_loss', loc_loss)
-        tf.summary.scalar('cls_loss_pos', cls_loss_pos)
-        tf.summary.scalar('cls_loss_neg', cls_loss_neg)
+        total_loss = loc_loss + cls_loss_pos + cls_loss_neg + reg_loss
 
-        total_loss = loc_loss + cls_loss_pos + cls_loss_neg
-        tf.summary.scalar('total_loss', total_loss)
+        with tf.variable_scope('loss'):
+            tf.summary.scalar('loc_loss', loc_loss)
+            tf.summary.scalar('cls_loss_pos', cls_loss_pos)
+            tf.summary.scalar('cls_loss_neg', cls_loss_neg)
+            tf.summary.scalar('reg_loss', reg_loss)
+            tf.summary.scalar('total_loss', total_loss)
+        tf.summary.scalar('num_pos', num_pos)
         return total_loss
 
 
