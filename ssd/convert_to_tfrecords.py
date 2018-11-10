@@ -51,6 +51,7 @@ class converter(object):
             annotation = annotation.replace('.jpeg', '.xml')
             annotation = annotation.replace('.png', '.xml')
             image_path = os.path.join(self.img_dir, image)
+            name = annotation.split('.')[0].encode()
             annotation_path = os.path.join(self.ann_dir, annotation)
             try:
                 image_string = open(image_path, 'rb').read()
@@ -82,6 +83,7 @@ class converter(object):
                 labels.append(label)
             example = tf.train.Example(features=tf.train.Features(feature={
                 'image_string': self.__bytes_feature(image_string),
+                'name': self.__bytes_feature(name),
                 'labels': self.__int64_feature(labels),
                 'ymin': self.__float_feature(ymins),
                 'xmin': self.__float_feature(xmins),

@@ -18,6 +18,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         self.size = (image_config['height'], image_config['width'])
         self.channels = image_config['channels']
         self.extra_anchor = anchor_config['extra_anchor']
+        self.mode = mode
 
     def _random_horizontally_flip_with_bbox(self, image, bboxes, seed=None):
         """
@@ -118,9 +119,11 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         return bboxes, labels, num_boxes
 
     def _pre_process(self, image, bboxes, size, labels):
+        num_boxes = tf.shape(bboxes)[0]
         with tf.name_scope('pre_process'):
-            image, bboxes, labels, num_boxes = self._random_crop_with_bbox(image, bboxes, labels)
-            image, bboxes = self._random_horizontally_flip_with_bbox(image, bboxes)
+            if self.mode is 'train':
+                image, bboxes, labels, num_boxes = self._random_crop_with_bbox(image, bboxes, labels)
+                image, bboxes = self._random_horizontally_flip_with_bbox(image, bboxes)
             image = self._resize(image, size)
         return image, bboxes, labels, num_boxes
 
@@ -209,8 +212,78 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         box = tf.gather(box, selected_indices)
         prob = tf.gather(prob, selected_indices)
         return box, prob
+    def decode_for_ap(self, net_outputs, num_classes):
+
+        locations = net_outputs['location']
+        logits = net_outputs['classification']
+        box_list = []
+        prob_list = []
+        for n in range(1, num_classes + 1):
+            box, prob = self.decode_class_for_ap(locations, logits, n)
+            box_list.append(box)
+            prob_list.append(prob)
+        return box_list, prob_list
+
+    def decode_class_for_ap(self, locations, logits, n):
+
+        probs = [tf.nn.softmax(c, axis=-1)[:, :, :, :, n] for c in logits]
 
 
+        x, y, w, h = list(zip(*[tf.unstack(loc, axis=-1) for loc in locations]))
+
+        # for every feature map
+        box_list = []
+        prob_list = []
+        for i, size in enumerate(self.feature_map_size):
+            # d for default boxes(anchors)
+            # x and y coordinate of centers of every cell, normalized to [0, 1]
+            d_cy, d_cx = np.mgrid[0:size[0], 0:size[1]].astype(np.float32)
+            d_cx = (d_cx + 0.5) / size[1]
+            d_cy = (d_cy + 0.5) / size[0]
+            d_cx = np.expand_dims(d_cx, axis=-1)
+            d_cy = np.expand_dims(d_cy, axis=-1)
+
+            # calculate width and heights
+            d_w = []
+            d_h = []
+            scale = self.anchor_scales[i]
+            # two aspect ratio 1 anchor scales
+            if self.extra_anchor[i]:
+                d_w.append(self.ext_anchor_scales[i])
+                d_h.append(self.ext_anchor_scales[i])
+            # other anchor scales
+            for ratio in self.aspect_ratios[i]:
+                d_w.append(scale * np.sqrt(ratio))
+                d_h.append(scale / np.sqrt(ratio))
+            d_w = np.array(d_w, dtype=np.float32)
+            d_h = np.array(d_h, dtype=np.float32)
+
+            g_cx = x[i]
+            g_cy = y[i]
+            g_w = w[i]
+            g_h = h[i]
+
+            g_cx = tf.contrib.layers.flatten(g_cx * d_w + d_cx)
+            g_cy = tf.contrib.layers.flatten(g_cy * d_h + d_cy)
+            g_w = tf.contrib.layers.flatten(tf.exp(g_w) * d_w)
+            g_h = tf.contrib.layers.flatten(tf.exp(g_h) * d_h)
+
+            x_min = g_cx - g_w / 2
+            x_max = g_cx + g_w / 2
+            y_min = g_cy - g_h / 2
+            y_max = g_cy + g_h / 2
+
+            box = tf.stack([y_min, x_min, y_max, x_max], axis=-1)
+            prob =tf.contrib.layers.flatten(probs[i])
+            box_list.append(box)
+            prob_list.append(prob)
+
+        box = tf.squeeze(tf.concat(box_list, axis=1))
+        prob = tf.squeeze(tf.concat(prob_list, axis=1))
+        selected_indices = tf.image.non_max_suppression(box, prob, 300, 0.3)
+        box = tf.gather(box, selected_indices)
+        prob = tf.gather(prob, selected_indices)
+        return box, prob
 
 
     def _bounding_boxes2ground_truth(self, bboxes, labels, anchor_scales, ext_anchor_scales,
@@ -336,6 +409,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         tfrecord_features = tf.parse_single_example(record,
                                                     features={
                                                         'image_string': tf.FixedLenFeature([], dtype=tf.string),
+                                                        'name': tf.FixedLenFeature([], dtype=tf.string),
                                                         'labels': tf.VarLenFeature(dtype=tf.int64),
                                                         'height': tf.FixedLenFeature([1], dtype=tf.int64),
                                                         'width': tf.FixedLenFeature([1], dtype=tf.int64),
@@ -348,6 +422,8 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         # width = tfrecord_features['width']
         image = tf.image.decode_jpeg(tfrecord_features['image_string'], channels=3)
         image = tf.reverse(image, axis=[-1])
+        image = tf.to_float(image)
+        name = tfrecord_features['name']
         # image = tf.transpose(image, [2, 1, 0])
         # image.set_shape([height, width, 3])
         labels = tf.sparse_tensor_to_dense(tfrecord_features['labels'])
@@ -361,11 +437,11 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         locations, labels = self._bounding_boxes2ground_truth(bboxes, labels, self.anchor_scales,
                                     self.ext_anchor_scales, self.aspect_ratios, self.feature_map_size,
                                     num_boxes, threshold=0.5)
-
-        image = tf.image.random_brightness(image, max_delta=10)
-        image = tf.image.random_contrast(image, lower=0.9, upper=1.1)
-        image = tf.image.random_saturation(image, 0.9, 1.1)
-        image = tf.image.random_hue(image, 0.05)
+        if self.mode is 'train':
+            image = tf.image.random_brightness(image, max_delta=10)
+            image = tf.image.random_contrast(image, lower=0.9, upper=1.1)
+            image = tf.image.random_saturation(image, 0.9, 1.1)
+            image = tf.image.random_hue(image, 0.05)
 
         # mean = tf.constant([123, 117, 104], dtype=image.dtype)
         # mean = tf.reshape(mean, [1, 1, 3])
@@ -374,7 +450,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         # image = image / 1.
 
 
-        return [image] + locations + labels
+        return [image] + locations + labels + [name]
 
     def _post_process(self, iterator):
         if iterator is None and self.fake:
@@ -385,8 +461,9 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         [tensor.set_shape([self.batch_size] + tensor.get_shape().as_list()[1:]) for tensor in e]
         images = e[0]
         locations = list(e[1:len(e) // 2 + 1])
-        labels = list(e[len(e) // 2 + 1:])
-        net_inputs = {'images': images}
+        labels = list(e[len(e) // 2 + 1: -1])
+        names = e[-1]
+        net_inputs = {'images': images, 'names': names}
         ground_truth = {'locations': locations, 'labels': labels}
         return net_inputs, ground_truth
 

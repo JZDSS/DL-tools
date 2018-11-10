@@ -24,7 +24,7 @@ class ModelBuilder(object):
 
         # input_class = kwargs['input_class']
         self.pipeline = self.input_class(self.config,
-                               batch_size=self.config[self.mode]['batch_size'], fake=self.fake)
+                               batch_size=self.config[self.mode]['batch_size'], fake=self.fake, mode=self.mode)
         filenames = self.image_config['path']
         self.net_inputs, self.ground_truth = self.pipeline.input_pipeline(filenames, len(filenames), 1,
                                                                      self.config[self.mode]['num_epochs'])

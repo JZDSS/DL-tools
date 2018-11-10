@@ -14,3 +14,6 @@ ignore/
 ckpt*/
 *_pb2.py
 cifar-10-batches-py/
+test/annots.pkl
+test/fish_det.txt
+
