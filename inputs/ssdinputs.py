@@ -280,7 +280,7 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
 
         box = tf.squeeze(tf.concat(box_list, axis=1))
         prob = tf.squeeze(tf.concat(prob_list, axis=1))
-        selected_indices = tf.image.non_max_suppression(box, prob, 300, 0.3)
+        selected_indices = tf.image.non_max_suppression(box, prob, 300, 0.5)
         box = tf.gather(box, selected_indices)
         prob = tf.gather(prob, selected_indices)
         return box, prob
@@ -460,8 +460,8 @@ class SSDInputs(tfrecordinputs.TFRecordsInputs):
         e = iterator.get_next()
         [tensor.set_shape([self.batch_size] + tensor.get_shape().as_list()[1:]) for tensor in e]
         images = e[0]
-        locations = list(e[1:len(e) // 2 + 1])
-        labels = list(e[len(e) // 2 + 1: -1])
+        locations = list(e[1:(len(e) - 1) // 2 + 1])
+        labels = list(e[(len(e) - 1) // 2 + 1: -1])
         names = e[-1]
         net_inputs = {'images': images, 'names': names}
         ground_truth = {'locations': locations, 'labels': labels}

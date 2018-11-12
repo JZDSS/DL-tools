@@ -14,16 +14,17 @@ from xml.etree import ElementTree
 
 txt2label = {'fish': 1}
 
+
 class converter(object):
 
-    def __init__(self, data_dir, out_path):
+    def __init__(self, data_dir, out_path, imageset):
         self.data_dir = data_dir
         self.img_dir = os.path.join(data_dir, 'JPEGImages')
         self.ann_dir = os.path.join(data_dir, 'Annotations')
+        self.imageset = os.path.join(data_dir, 'ImageSets/') + imageset
         self.out_path = out_path
-        self.images = os.listdir(self.img_dir)
-        self.annotations = os.listdir(self.ann_dir)
-        assert len(self.images) == len(self.annotations)
+        self.ids = [x.strip() for x in open(self.imageset).readlines()]
+
 
     def tolist(self, value):
         if not isinstance(value, list):
@@ -46,10 +47,9 @@ class converter(object):
 
         writer = tf.python_io.TFRecordWriter(self.out_path)
 
-        for image in self.images:
-            annotation = image.replace('.jpg', '.xml')
-            annotation = annotation.replace('.jpeg', '.xml')
-            annotation = annotation.replace('.png', '.xml')
+        for id in self.ids:
+            annotation = id + '.xml'
+            image = id + '.jpg'
             image_path = os.path.join(self.img_dir, image)
             name = annotation.split('.')[0].encode()
             annotation_path = os.path.join(self.ann_dir, annotation)
@@ -97,7 +97,7 @@ class converter(object):
         writer.close()
 
 def main():
-    c = converter('/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/test', './toy-test.tfrecords')
+    c = converter('/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/', './toy-test.tfrecords', 'test.txt')
     c.convert()
 
 if __name__ == '__main__':

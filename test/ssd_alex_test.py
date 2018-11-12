@@ -1,4 +1,5 @@
-# os.environ['CUDA_VISIBLE_DEVICES']='-1'
+import os
+os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import cv2
 import numpy as np
 import tensorflow as tf
@@ -28,7 +29,7 @@ saver = tf.train.Saver(name="saver")
 num_classes = config['model']['num_classes'] + 1
 num_images = 200
 f = open('fish_det.txt', 'w')
-
+s = 1
 with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())
     dir = tf.train.latest_checkpoint(ckpt_dir)
@@ -42,12 +43,21 @@ with tf.Session() as sess:
             name = name[0].decode()
             for bb, pp, c in zip(b, p, color):
                 for bbb, ppp in zip(bb, pp):
-                    if ppp > 0.5:
-                        cv2.rectangle(im, (int(bbb[1]*500), int(bbb[0]*375)), (int(bbb[3]*500), int(bbb[2]*375)), c, 2)
                     xmin = max(int(bbb[1] * 500) + 1, 0)
                     ymin = max(int(bbb[0] * 375) + 1, 0)
                     xmax = min(int(bbb[3] * 500) + 1, 499)
                     ymax = min(int(bbb[2] * 375) + 1, 499)
+                    xc = (xmin + xmax) / 2
+                    yc = (ymin + ymax) / 2
+                    w = (xmax - xmin) / 2 * s
+                    h = (ymax - ymin) / 2 * s
+                    xmin = int(xc - w)
+                    xmax = int(xc + w)
+                    ymin = int(yc - h)
+                    ymax = int(yc + h)
+                    if ppp > 0.5:
+                        cv2.rectangle(im, (xmin, ymin), (xmax, ymax), c, 2)
+
                     f.write('{:s} {:f} {:d} {:d} {:d} {:d}\n'.format(name, ppp, xmin, ymin, xmax, ymax))
                     a = 1
             cv2.imshow("", im)
@@ -56,8 +66,8 @@ with tf.Session() as sess:
             f.close()
             break
 rec, prec, ap = voc.voc_eval("/home/yqi/workspace/DL-tools/test/fish_det.txt",
-                             "/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/test/Annotations/{:s}.xml",
-                             "/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/test/ImageSets/test.txt",
+                             "/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/Annotations/{:s}.xml",
+                             "/home/yqi/Desktop/WineDownloads/大作业3/to student/FishData_subset/ImageSets/test.txt",
                              "fish",
                              ".",
                              ovthresh=0.5,
