@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES']='-1'
+#os.environ['CUDA_VISIBLE_DEVICES']='-1'
 import cv2
 import numpy as np
 import tensorflow as tf
@@ -47,21 +47,21 @@ with tf.Session() as sess:
                     ymin = max(int(bbb[0] * 375) + 1, 0)
                     xmax = min(int(bbb[3] * 500) + 1, 499)
                     ymax = min(int(bbb[2] * 375) + 1, 499)
-                    xc = (xmin + xmax) / 2
-                    yc = (ymin + ymax) / 2
-                    w = (xmax - xmin) / 2 * s
-                    h = (ymax - ymin) / 2 * s
-                    xmin = int(xc - w)
-                    xmax = int(xc + w)
-                    ymin = int(yc - h)
-                    ymax = int(yc + h)
+                    # xc = (xmin + xmax) / 2
+                    # yc = (ymin + ymax) / 2
+                    # w = (xmax - xmin) / 2 * s
+                    # h = (ymax - ymin) / 2 * s
+                    # xmin = int(xc - w)
+                    # xmax = int(xc + w)
+                    # ymin = int(yc - h)
+                    # ymax = int(yc + h)
                     if ppp > 0.5:
                         cv2.rectangle(im, (xmin, ymin), (xmax, ymax), c, 2)
 
                     f.write('{:s} {:f} {:d} {:d} {:d} {:d}\n'.format(name, ppp, xmin, ymin, xmax, ymax))
                     a = 1
             cv2.imshow("", im)
-            cv2.waitKey(1)
+            cv2.waitKey(0)
         except tf.errors.OutOfRangeError as e:
             f.close()
             break

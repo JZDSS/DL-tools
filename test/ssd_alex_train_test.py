@@ -50,10 +50,7 @@ def main(_):
                 print('Failed! Train from 0')
         train_writer = tf.summary.FileWriter(log_dir, sess.graph)
         train_writer.flush()
-
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(coord=coord)
-
+        
         d = 100
 
         while True:
@@ -71,9 +68,6 @@ def main(_):
                 print(e)
                 saver.save(sess, os.path.join(ckpt_dir, 'ssd_model'), global_step=i - 1)
                 break
-
-        coord.request_stop()
-        coord.join(threads)
 
 if __name__ == "__main__":
     tf.app.run()
