@@ -19,8 +19,20 @@ class Configure(object):
             src.append(anchor.src)
             aspect_ratios.append(ratio)
         num_features = len(src)
-        anchor_scales = np.linspace(anchor_list.min_scale, anchor_list.max_scale, num_features).tolist()
-        anchor_scales.append(2*anchor_scales[-1] - anchor_scales[-2])
+        method = anchor_list.method
+        if method == "linear":
+            anchor_scales = np.linspace(anchor_list.min_scale, anchor_list.max_scale, num_features).tolist()
+            anchor_scales.append(2*anchor_scales[-1] - anchor_scales[-2])
+        elif method == "exp":
+            q = (anchor_list.max_scale / anchor_list.min_scale) ** (1. / (len(aspect_ratios) - 1))
+            anchor_scales = [anchor_list.min_scale]
+            for i in range(len(aspect_ratios)):
+                s = anchor_scales[-1] * q
+                s = s if s <=1 else 0.99
+                anchor_scales.append(s)
+        else:
+            print("unknown method!")
+            raise RuntimeError
         ext_anchor_scales = []
         for i in range(num_features):
             ext_anchor_scales.append(np.sqrt(anchor_scales[i] * anchor_scales[i + 1]))

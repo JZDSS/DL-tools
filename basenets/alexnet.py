@@ -7,8 +7,9 @@ import numpy as np
 
 class AlexNet(net.Net):
 
-    def __init__(self, inputs, name='AlexNet', npy_path=None, weight_decay=0.0004, **kwargs):
-        super(AlexNet, self).__init__(weight_decay=weight_decay, name=name, **kwargs)
+    def __init__(self, inputs, name='AlexNet', npy_path=None, weight_decay=0.0005, **kwargs):
+        super(AlexNet, self).__init__(name=name, **kwargs)
+        self.weight_decay = weight_decay
         self.inputs = inputs
         self.npy_path = npy_path
         self.is_training = tf.placeholder(dtype=tf.bool, shape=[])
@@ -61,7 +62,12 @@ class AlexNet(net.Net):
             self.outputs['logits'] = tf.squeeze(y)
 
     def calc_loss(self):
-        pass
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.outputs['logits'],
+                                                              labels=self.ground_truth['labels'])
+        loss = tf.reduce_mean(loss)
+        tf.add_to_collection(tf.GraphKeys.LOSSES, loss)
+        self.loss = loss
+        return loss
 
     def get_update_ops(self):
         return []

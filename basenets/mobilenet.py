@@ -91,22 +91,3 @@ class MobileNet(net.Net):
 
     def setup(self):
         return []
-
-
-if __name__ == '__main__':
-
-    x = tf.placeholder(shape=[None, 224, 224, 3], dtype=tf.float32)
-    net = MobileNet({'images': x}, npy_path='../npy/alexnet.npy')
-    pred = net.outputs['logits']
-
-    init_ops = tf.get_collection(tf.GraphKeys.INIT_OP)
-
-    import cv2
-    img = cv2.imread('../images/dog.jpg')
-    img = cv2.resize(img, (224, 224))
-    img = img
-    img = np.expand_dims(img, 0)
-    with tf.Session() as sess:
-        sess.run(init_ops)
-        print(sess.run(tf.argmax(pred, 0), feed_dict={x: img}))
-
