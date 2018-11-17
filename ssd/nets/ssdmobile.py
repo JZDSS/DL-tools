@@ -4,11 +4,11 @@ from tensorflow.contrib.framework import arg_scope
 import numpy as np
 
 from basenets import mobilenet
-from basenets import utils
+from basenets.utils import dropblock
 from ssd.nets import ssdbase
 
 
-class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
+class SSDMobileNet(ssdbase.SSDBase, mobilenet.MobileNet):
 
     def __init__(self,
                  inputs,
@@ -17,7 +17,7 @@ class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
                  anchor_config,
                  name='SSD_MobileNet',
                  npy_path=None,
-                 weight_decay=0.00004,
+                 weight_decay=0.0004,
                  **kwargs):
         super(SSDMobileNet, self).__init__(inputs, name, npy_path, weight_decay=weight_decay,
                                          **kwargs)
@@ -54,130 +54,27 @@ class SSDMobileNet(mobilenet.MobileNet, ssdbase.SSDBase):
             y = layers.conv2d(y, 256, (1, 1), 1, scope='conv1')
             endpoints['conv1'] = y
             y = layers.conv2d(y, 512, (3, 3), 2, scope='conv2')
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['conv2'] = y
             y = layers.conv2d(y, 128, (1, 1), 1, scope='conv3')
             endpoints['conv3'] = y
             y = layers.conv2d(y, 256, (3, 3), 2, scope='conv4')
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['conv4'] = y
             y = layers.conv2d(y, 128, (1, 1), 1, scope='conv5')
             endpoints['conv5'] = y
             y = layers.conv2d(y, 256, (3, 3), 2, scope='conv6')
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['conv6'] = y
             y = layers.conv2d(y, 64, (1, 1), 1, scope='conv7')
             endpoints['conv7'] = y
             y = layers.conv2d(y, 128, (3, 3), 2, scope='conv8')
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['conv8'] = y
 
-    def predict(self):
-        feature_maps = [self.endpoints[f] for f in self.src]
-        location_list = []
-        classification_list = []
-        with arg_scope([layers.conv2d],
-                       padding='SAME',
-                       activation_fn=None,
-                       weights_regularizer=layers.l2_regularizer(self.weight_decay),
-                       biases_regularizer=layers.l2_regularizer(self.weight_decay)):
-            for i, feature_map in enumerate(feature_maps):
-                num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
-                prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
-
-                locations, classifications = tf.split(prediction,
-                                                      [self.num_anchors[i] * 4,
-                                                       self.num_anchors[i] * (self.num_classes + 1)],
-                                                      -1)
-                shape = locations.get_shape()
-                locations = tf.reshape(locations, [-1,
-                                                   shape[1],
-                                                   shape[2],
-                                                   self.num_anchors[i],
-                                                   4])
-                shape = classifications.get_shape()
-                classifications = tf.reshape(classifications,
-                                             [-1,
-                                              shape[1],
-                                              shape[2],
-                                              self.num_anchors[i],
-                                              (self.num_classes + 1)])
-                location_list.append(locations)
-                classification_list.append(classifications)
-        self.outputs['location'] = location_list
-        self.outputs['classification'] = classification_list
-
     def ssd_setup(self):
-        # with tf.Session() as sess:
-        #     tf.initialize_all_variables().run()
-        #     a = sess.run('Conv2d_0/weights:0')
         weight_dict = np.load(self.npy_path).item()
         with tf.variable_scope('', reuse=True):
             for k in weight_dict:
                 init_op = tf.get_variable(k).assign(weight_dict[k])
                 tf.add_to_collection(tf.GraphKeys.INIT_OP, init_op)
-
-
-    def calc_loss(self):
-        location = self.outputs['location']
-        classification = self.outputs['classification']
-        cls_loss = [tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-                for (logits, labels) in zip(classification, self.ground_truth['labels'])]
-        cls_loss = tf.concat([layers.flatten(t) for t in cls_loss], axis=-1)
-
-        loc_loss = [tf.reduce_sum(tf.losses.huber_loss(target, loc, reduction='none'), axis=-1)
-                    for (target, loc) in zip(self.ground_truth['locations'], location)]
-        loc_loss = tf.concat([layers.flatten(t) for t in loc_loss], axis=-1)
-
-        flattened_label = tf.concat([layers.flatten(t) for t in self.ground_truth['labels']], axis=-1)
-
-        cls_loss_list = tf.unstack(cls_loss)
-        # loc_loss_list = tf.unstack(loc_loss)
-        flattened_label_list = tf.unstack(flattened_label)
-
-        masks = []
-        poss = []
-        negs = []
-        for i, cls in enumerate(cls_loss_list):
-            sorted_cls_loss = tf.contrib.framework.sort(cls, -1, 'DESCENDING')
-            labels = flattened_label_list[i]
-            pos = tf.greater(labels, 0)
-            neg = tf.equal(labels, 0)
-            num_pos = tf.reduce_sum(tf.to_int32(pos))
-            max_neg = tf.reduce_sum(tf.to_int32(neg))
-            max_idx = tf.minimum(3 * num_pos, max_neg - 1)
-            num_selected = num_pos + max_idx + 1
-            min_score = sorted_cls_loss[max_idx]
-            selected = tf.greater(cls, min_score)
-            neg = tf.logical_and(neg, selected)
-
-            mask = tf.logical_or(pos, neg)
-            ass = tf.assert_none_equal(num_pos, 0)
-            tf.add_to_collection(ass, "ASSERT")
-            # masks.append(tf.to_float(mask))
-            # poss.append(tf.to_float(pos))
-            # negs.append(tf.to_float(neg))
-            masks.append(utils.safe_division(tf.to_float(mask), tf.to_float(num_pos)))
-            poss.append(utils.safe_division(tf.to_float(pos), tf.to_float(num_pos)))
-            negs.append(utils.safe_division(tf.to_float(neg), tf.to_float(num_pos)))
-
-        cls_mask = tf.stack([m for m in masks], axis=0)
-        pos_mask = tf.stack([m for m in poss], axis=0)
-        neg_mask = tf.stack([m for m in negs], axis=0)
-
-        cls_loss_pos = tf.multiply(cls_loss, pos_mask)
-        cls_loss_pos = tf.reduce_sum(cls_loss_pos, axis=-1)
-        cls_loss_pos = tf.reduce_mean(cls_loss_pos)
-
-        cls_loss_neg = tf.multiply(cls_loss, neg_mask)
-        cls_loss_neg = tf.reduce_sum(cls_loss_neg, axis=-1)
-        cls_loss_neg = tf.reduce_mean(cls_loss_neg)
-
-        loc_loss = tf.multiply(loc_loss, pos_mask)
-        loc_loss = tf.reduce_sum(loc_loss, axis=-1)
-        loc_loss = tf.reduce_mean(loc_loss)
-
-        tf.summary.scalar('loc_loss', loc_loss)
-        tf.summary.scalar('cls_loss_pos', cls_loss_pos)
-        tf.summary.scalar('cls_loss_neg', cls_loss_neg)
-
-        total_loss = loc_loss + cls_loss_pos + cls_loss_neg
-        tf.summary.scalar('total_loss', total_loss)
-        return total_loss
-

@@ -7,7 +7,7 @@ import time
 # tf.enable_eager_execution()
 
 def main(_):
-    config = configure.Configure('../ssd/ssd_alex.config')
+    config = configure.Configure('../ssd/ssd_mobile.config')
     config = config.get_config()
 
     log_dir = config['train']['log_dir']

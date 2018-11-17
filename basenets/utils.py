@@ -50,7 +50,7 @@ def safe_division(x, y):
     return tf.case([(tf.equal(y, 0), lambda: tf.zeros_like(x))], lambda: x / y)
 
 
-def dropblock(x, keep_prob, block_size):
+def dropblock(x, keep_prob, block_size, is_training):
     # original author: shenmbsw
     # see https://github.com/shenmbsw/tensorflow-dropblock
     _,w,h,c = x.shape.as_list()
@@ -65,4 +65,5 @@ def dropblock(x, keep_prob, block_size):
     mask = tf.pad(mask, pad_shape)
     mask = tf.nn.max_pool(mask, [1, block_size, block_size, 1], [1, 1, 1, 1], 'SAME')
     mask = tf.cast(1 - mask,tf.float32)
-    return tf.multiply(x,mask)
+    mask = mask / tf.reduce_mean(mask)
+    return tf.case([(is_training, lambda: tf.multiply(x,mask))], default=lambda: x)

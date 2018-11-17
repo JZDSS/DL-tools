@@ -73,40 +73,6 @@ class SSDAlexNet(ssdbase.SSDBase, alexnet.AlexNet):
             y = layers.conv2d(y, 256, [3, 3], 1, 'VALID', scope='conv11_2')
             endpoints['conv11_2'] = y
 
-    def predict(self):
-        feature_maps = [self.endpoints[f] for f in self.src]
-        location_list = []
-        classification_list = []
-        with tf.contrib.framework.arg_scope([layers.conv2d],
-                                            activation_fn=None,
-                                            weights_regularizer=layers.l2_regularizer(self.weight_decay),
-                                            biases_regularizer=layers.l2_regularizer(self.weight_decay)):
-            for i, feature_map in enumerate(feature_maps):
-                num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
-                prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
-
-                locations, classifications = tf.split(prediction,
-                                                      [self.num_anchors[i] * 4,
-                                                       self.num_anchors[i] * (self.num_classes + 1)],
-                                                      -1)
-                shape = locations.get_shape()
-                locations = tf.reshape(locations, [-1,
-                                                   shape[1],
-                                                   shape[2],
-                                                   self.num_anchors[i],
-                                                   4])
-                shape = classifications.get_shape()
-                classifications = tf.reshape(classifications,
-                                             [-1,
-                                              shape[1],
-                                              shape[2],
-                                              self.num_anchors[i],
-                                              (self.num_classes + 1)])
-                location_list.append(locations)
-                classification_list.append(classifications)
-        self.outputs['location'] = location_list
-        self.outputs['classification'] = classification_list
-
     def ssd_setup(self):
         weight_dict = np.load(self.npy_path, encoding="latin1").item()
         with tf.variable_scope('rebuild/fc6', reuse=True):

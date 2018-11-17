@@ -10,7 +10,7 @@ from ssd.configure import Configure
 from builder.model_builder import ModelBuilder
 import ssd.dataset.voc_eval as voc
 
-config = Configure(path='../ssd/ssd_alex.config').get_config()
+config = Configure(path='../ssd/ssd_mobile.config').get_config()
 
 log_dir = config['eval']['log_dir']
 ckpt_dir = config['eval']['ckpt_dir']
@@ -61,7 +61,7 @@ with tf.Session() as sess:
                     f.write('{:s} {:f} {:d} {:d} {:d} {:d}\n'.format(name, ppp, xmin, ymin, xmax, ymax))
                     a = 1
             cv2.imshow("", im)
-            cv2.waitKey(1)
+            cv2.waitKey(0)
         except tf.errors.OutOfRangeError as e:
             f.close()
             break
