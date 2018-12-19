@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from tensorflow.contrib.framework import arg_scope
 from basenets import net
-from .utils import dropblock
+# from .utils import dropblock
 import numpy as np
 
 
@@ -51,39 +51,39 @@ class MobileNet(net.Net):
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_5')
             y = layers.conv2d(y, 256, (1, 1), scope='Pointwise_Conv2d_5')
             endpoints['Pointwise_Conv2d_5'] = y
-            # y = layers.separable_conv2d(y, None, (3, 3), 1, stride=2, scope='Depthwise_Conv2d_6')
-            y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_6')
+            y = layers.separable_conv2d(y, None, (3, 3), 1, stride=2, scope='Depthwise_Conv2d_6')
+            # y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_6')
             y = layers.conv2d(y, 512, (1, 1), scope='Pointwise_Conv2d_6')
             endpoints['Pointwise_Conv2d_6'] = y
             # repeat 5 times
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_7')
             y = layers.conv2d(y, 512, (1, 1), scope='Pointwise_Conv2d_7')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_7'] = y
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_8')
             y = layers.conv2d(y, 512, (1, 1), scope='Pointwise_Conv2d_8')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_8'] = y
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_9')
             y = layers.conv2d(y, 512, (1, 1), scope='Pointwise_Conv2d_9')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_9'] = y
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=2, scope='Depthwise_Conv2d_10')
             y = layers.conv2d(y, 512, (1, 1), scope='Pointwise_Conv2d_10')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_10'] = y
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_11')
             y = layers.conv2d(y, 512, (1, 1), scope='Pointwise_Conv2d_11')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_11'] = y
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=2, scope='Depthwise_Conv2d_12')
             y = layers.conv2d(y, 1024, (1, 1), scope='Pointwise_Conv2d_12')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_12'] = y
             # 此层stride存疑，原文为2。
             y = layers.separable_conv2d(y, None, (3, 3), 1, stride=1, scope='Depthwise_Conv2d_13')
             y = layers.conv2d(y, 1024, (1, 1), scope='Pointwise_Conv2d_13')
-            y = dropblock(y, 0.9, 7, self.is_training)
+            # y = dropblock(y, 0.9, 7, self.is_training)
             endpoints['Pointwise_Conv2d_13'] = y
             y = tf.reduce_mean(y, keepdims=True, axis=[1, 2])
             endpoints['global_pooling'] = y

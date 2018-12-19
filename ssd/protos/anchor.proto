@@ -6,4 +6,5 @@ message AnchorConfig {
     required string src = 1;
     repeated float aspect_ratio = 2;
     required bool extra_anchor = 3 [default=true];
+    optional int32 amplify = 4 [default=1];
 }

@@ -21,6 +21,7 @@ class SSDMobileNet(ssdbase.SSDBase, mobilenet.MobileNet):
                  **kwargs):
         super(SSDMobileNet, self).__init__(inputs, name, npy_path, weight_decay=weight_decay,
                                          **kwargs)
+        self.A = anchor_config['amplify']
         self.ground_truth = ground_truth
         self.num_classes = num_classes
         self.src = anchor_config['src']

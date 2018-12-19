@@ -14,10 +14,12 @@ class Configure(object):
     def _get_anchor_config(self, anchor_list):
         src = []
         aspect_ratios = []
+        amplify = []
         for anchor in anchor_list.anchor:
             ratio =[r for r in anchor.aspect_ratio]
             src.append(anchor.src)
             aspect_ratios.append(ratio)
+            amplify.append(anchor.amplify)
         num_features = len(src)
         method = anchor_list.method
         if method == "linear":
@@ -45,6 +47,7 @@ class Configure(object):
         anchor_config['extra_anchor'] = [a.extra_anchor for a in anchor_list.anchor]
         anchor_config['src'] = src
         anchor_config['feature_map_size'] = None
+        anchor_config['amplify'] = amplify
         return anchor_config
 
 
@@ -114,7 +117,8 @@ class Configure(object):
 
             feature_map_size = [builder.model.endpoints[k].get_shape().as_list()[1:3] for k in anchor_config['src']]
             anchor_config['feature_map_size'] = feature_map_size
-
+        anchor_config['feature_map_size'] = \
+            [[s[0] * a, s[1] * a] for a, s in zip(anchor_config['amplify'], anchor_config['feature_map_size'])]
         # tf.reset_default_graph()
         config = {}
         config['model'] = model_config

@@ -4,7 +4,7 @@ import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
 from basenets import Net
-
+from basenets import utils
 
 @six.add_metaclass(ABCMeta)
 class SSDBase(Net):
@@ -35,7 +35,12 @@ class SSDBase(Net):
                                             weights_regularizer=layers.l2_regularizer(self.weight_decay),
                                             biases_regularizer=layers.l2_regularizer(self.weight_decay)):
             for i, feature_map in enumerate(feature_maps):
+                # num_outputs = self.num_anchors[i] * self.A[i] * self.A[i] * (self.num_classes + 1 + 4)
+                # prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
+                #
+                # prediction = utils.tf_re(prediction, self.A[i])
                 num_outputs = self.num_anchors[i] * (self.num_classes + 1 + 4)
+                feature_map = utils.tf_re(feature_map, self.A[i])
                 prediction = layers.conv2d(feature_map, num_outputs, [3, 3], 1, scope='pred_%d' % i, activation_fn=None)
 
                 locations, classifications = tf.split(prediction,

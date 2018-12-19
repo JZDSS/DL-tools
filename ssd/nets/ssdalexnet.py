@@ -25,6 +25,7 @@ class SSDAlexNet(ssdbase.SSDBase, alexnet.AlexNet):
         self.aspect_ratios = anchor_config['aspect_ratios']
         self.extra_anchor = anchor_config['extra_anchor']
         self.num_anchors = [len(ratio) + int(extra) for ratio, extra in zip(self.aspect_ratios, self.extra_anchor)]
+        self.A = anchor_config['amplify']
         self.ext_anchors = anchor_config['extra_scales']
         self.base_net()
         self.extra_net()

@@ -67,3 +67,22 @@ def dropblock(x, keep_prob, block_size, is_training):
     mask = tf.cast(1 - mask,tf.float32)
     mask = mask / tf.reduce_mean(mask)
     return tf.case([(is_training, lambda: tf.multiply(x,mask))], default=lambda: x)
+
+
+def tf_re(x, A):
+    x = tf.convert_to_tensor(x)
+    _, h, w, c = x.get_shape().as_list()
+    assert c % (A**2) == 0
+    p = tf.split(x, c//A//A, axis=-1)
+    rs = []
+    for tt in p:
+        t = tf.split(tt, A, axis=-1)
+        l = []
+        for s in t:
+            s = tf.reshape(s, (-1, h, w * A))
+            l.append(s)
+        r = tf.concat(l, -1)
+        r = tf.reshape(r, [-1, h * A, w * A, 1])
+        rs.append(r)
+    res = tf.concat(rs, -1)
+    return res
